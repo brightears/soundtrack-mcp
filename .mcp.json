@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "soundtrack": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "SOUNDTRACK_API_TOKEN": "${SOUNDTRACK_API_TOKEN}",
+        "SOUNDTRACK_API_URL": "https://api.soundtrackyourbrand.com/v2"
+      }
+    }
+  }
+}

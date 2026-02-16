@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment variables (secrets)
+.env
+.env.*
+!.env.example
+
+# Claude Code local files
+CLAUDE.local.md
+.claude/settings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/

@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(npm install*)",
+      "Bash(npm init*)",
+      "Bash(tsc*)",
+      "Read(src/**)",
+      "Read(docs/**)",
+      "Read(package.json)",
+      "Read(tsconfig.json)",
+      "Read(.mcp.json)",
+      "Read(CLAUDE.md)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Bash(rm -rf *)"
+    ]
+  }
+}
