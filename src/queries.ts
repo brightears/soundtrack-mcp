@@ -1,18 +1,32 @@
-// ── Introspection ──────────────────────────────────────────────────────────
+// ── Introspection (paginated) ──────────────────────────────────────────────
 
-export const ME_ACCOUNTS = `
-query ListAccounts {
+export const ME_ACCOUNTS_PAGE = `
+query ListAccounts($first: Int!, $after: String) {
   me {
     ... on PublicAPIClient {
-      accounts(first: 100) {
+      accounts(first: $first, after: $after) {
         edges {
           node {
             id
             businessName
           }
         }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
       }
     }
+  }
+}`;
+
+// ── Direct Account Lookup ──────────────────────────────────────────────────
+
+export const ACCOUNT_BY_ID = `
+query AccountById($id: ID!) {
+  account(id: $id) {
+    id
+    businessName
   }
 }`;
 
@@ -125,32 +139,24 @@ mutation Pause($soundZone: ID!) {
   }
 }`;
 
-// ── Full Overview ──────────────────────────────────────────────────────────
+// ── Account Overview (for scoped accounts) ─────────────────────────────────
 
-export const FULL_OVERVIEW = `
-query FullOverview {
-  me {
-    ... on PublicAPIClient {
-      accounts(first: 100) {
-        edges {
-          node {
-            id
-            businessName
-            locations(first: 50) {
-              edges {
-                node {
-                  id
-                  name
-                  soundZones(first: 50) {
-                    edges {
-                      node {
-                        id
-                        name
-                        isPaired
-                      }
-                    }
-                  }
-                }
+export const ACCOUNT_OVERVIEW = `
+query AccountOverview($id: ID!) {
+  account(id: $id) {
+    id
+    businessName
+    locations(first: 50) {
+      edges {
+        node {
+          id
+          name
+          soundZones(first: 50) {
+            edges {
+              node {
+                id
+                name
+                isPaired
               }
             }
           }

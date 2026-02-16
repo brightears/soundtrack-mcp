@@ -11,6 +11,16 @@ if (!API_TOKEN) {
   );
 }
 
+// Optional: scope to specific account IDs (comma-separated)
+// When set, list_accounts returns only these accounts instead of paginating all.
+// Example: SOUNDTRACK_ACCOUNT_IDS=QWNjb3VudCwsMWNqMTM3Ymp3MXMv,QWNjb3VudCwsMW1sbTJ0ZW52OWMv
+const ACCOUNT_IDS_RAW = process.env.SOUNDTRACK_ACCOUNT_IDS || "";
+
+export function getScopedAccountIds(): string[] | null {
+  if (!ACCOUNT_IDS_RAW.trim()) return null;
+  return ACCOUNT_IDS_RAW.split(",").map((id) => id.trim()).filter(Boolean);
+}
+
 interface GraphQLResponse<T = unknown> {
   data?: T;
   errors?: Array<{ message: string; path?: string[] }>;
