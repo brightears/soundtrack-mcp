@@ -91,7 +91,9 @@ function wrap(
 router.get(
   "/accounts",
   wrap(async (_req, res) => {
-    const scopedIds = getScopedAccountIds();
+    const scopedIds =
+      (res.locals.scopedAccountIds as string[] | undefined) ??
+      getScopedAccountIds();
     const accounts = scopedIds
       ? await fetchAccountsByIds(scopedIds)
       : await fetchAllAccounts();
@@ -116,7 +118,9 @@ router.get(
       return;
     }
 
-    const scopedIds = getScopedAccountIds();
+    const scopedIds =
+      (res.locals.scopedAccountIds as string[] | undefined) ??
+      getScopedAccountIds();
     const term = name.toLowerCase();
     let matches: Account[];
 

@@ -8,64 +8,79 @@ Control music playback across your business locations with AI. This MCP server c
 
 Talk to your AI assistant in natural language:
 
-- *"What's playing at the Hilton Pattaya lobby right now?"*
+- *"What's playing at the lobby right now?"*
 - *"Turn the volume down to 5 in the restaurant zone"*
 - *"Skip this track in the bar"*
-- *"Pause music in all zones at the Bangkok office"*
-- *"Show me all sound zones for Centara Grand"*
+- *"Pause music in all zones"*
+- *"Show me all my sound zones"*
 
-## Quick Start
+## Quick Start for bmasia Clients
 
-### Are you a bmasia client?
+If your account is managed by bmasia, you can use our hosted server. You just need your **account ID** — a string that looks like `QWNjb3VudCwsMXN4N242NTZyeTgv`.
 
-If your account is managed by bmasia, you can use our hosted server immediately — no setup required.
+**How to find your account ID:**
+- Ask your bmasia representative — they'll send you a ready-to-use URL
+- Or find it in your Soundtrack Your Brand dashboard URL (the long code after `/accounts/`)
 
-**For Claude Desktop:**
+Replace `YOUR_ACCOUNT_ID` below with your actual account ID.
 
-Edit your Claude Desktop config file:
+---
+
+### Claude Desktop
+
+Edit your config file:
 
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-Add this to the `mcpServers` section:
 
 ```json
 {
   "mcpServers": {
     "soundtrack": {
       "type": "url",
-      "url": "https://soundtrack-mcp.onrender.com/mcp"
+      "url": "https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/mcp"
     }
   }
 }
 ```
 
-Restart Claude Desktop. You'll see "soundtrack" in your connectors. Start chatting!
+Restart Claude Desktop. You'll see "soundtrack" in your connectors.
 
-**For Claude.ai (web):**
+### Claude.ai (web)
 
-1. Go to [claude.ai](https://claude.ai) Settings > Integrations
+1. Go to [claude.ai](https://claude.ai) > Settings > Integrations
 2. Add integration > Custom MCP server
-3. Enter the URL: `https://soundtrack-mcp.onrender.com/mcp`
+3. Enter the URL: `https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/mcp`
 4. Save and start a new chat
 
-**For ChatGPT:**
+### ChatGPT
 
 1. Go to [ChatGPT](https://chat.openai.com) > Explore GPTs > Create a GPT
-2. Go to the **Configure** tab > **Actions** > **Create new action**
-3. Click **Import from URL** and paste: `https://soundtrack-mcp.onrender.com/openapi.json`
+2. Go to **Configure** > **Actions** > **Create new action**
+3. Click **Import from URL** and paste:
+   ```
+   https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/openapi.json
+   ```
 4. Set Authentication to **None**
-5. Save and test with *"Search for Hilton"*
+5. Save and try: *"What's currently playing?"*
 
-> **Note:** The hosted server on Render's free tier may take ~50 seconds to wake up on the first request after inactivity. Subsequent requests are fast.
+> **Note:** The hosted server on Render's free tier may take ~50 seconds to wake up after inactivity. Subsequent requests are fast.
+
+### Multiple accounts
+
+If you manage several accounts, separate them with commas:
+
+```
+https://soundtrack-mcp.onrender.com/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp
+```
 
 ---
 
-### Not a bmasia client? Run your own server
+## Self-Hosting (non-bmasia users)
 
 If you have your own Soundtrack Your Brand API credentials, you can run the server yourself.
 
-#### 1. Get API credentials
+### 1. Get API credentials
 
 Apply for API access at [soundtrackyourbrand.com/our-api/apply](https://www.soundtrackyourbrand.com/our-api/apply). You'll receive a Client ID and Client Secret.
 
@@ -75,7 +90,7 @@ Create a base64-encoded token:
 echo -n "YOUR_CLIENT_ID:YOUR_CLIENT_SECRET" | base64
 ```
 
-#### 2. Clone and install
+### 2. Clone and install
 
 ```bash
 git clone https://github.com/brightears/soundtrack-mcp.git
@@ -83,7 +98,7 @@ cd soundtrack-mcp
 npm install
 ```
 
-#### 3. Configure
+### 3. Configure
 
 ```bash
 cp .env.example .env
@@ -95,15 +110,15 @@ Edit `.env` and add your base64-encoded token:
 SOUNDTRACK_API_TOKEN=your_base64_encoded_token_here
 ```
 
-#### 4. Build
+### 4. Build
 
 ```bash
 npm run build
 ```
 
-#### 5. Connect to Claude Desktop
+### 5. Connect to Claude Desktop
 
-Edit your Claude Desktop config:
+Edit your config:
 
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -124,34 +139,40 @@ Edit your Claude Desktop config:
 
 Restart Claude Desktop.
 
-#### 6. (Optional) Run as HTTP server
+### 6. (Optional) Run as HTTP server
 
-To use with Claude.ai, ChatGPT, or any remote client:
+For Claude.ai, ChatGPT, or any remote client:
 
 ```bash
 npm run start:http
 ```
 
-This starts the server on port 3000 (or `PORT` env var) with:
+Starts on port 3000 (or `PORT` env var) with:
 
-| Endpoint | Protocol | Use with |
-|----------|----------|----------|
-| `/mcp` | MCP over HTTP | Claude.ai, MCP clients |
-| `/api/*` | REST | ChatGPT Actions |
-| `/openapi.json` | OpenAPI 3.1 spec | ChatGPT GPT configuration |
-| `/health` | JSON | Health checks |
+| Endpoint | Use with |
+|----------|----------|
+| `/mcp` | Claude.ai, MCP clients |
+| `/api/*` | ChatGPT Actions (REST) |
+| `/openapi.json` | ChatGPT GPT setup |
+| `/c/{accountIds}/mcp` | Scoped MCP (per-client) |
+| `/c/{accountIds}/api/*` | Scoped REST (per-client) |
+| `/health` | Health checks |
 
-Deploy to Render, Railway, Fly.io, or any Node.js host. Set `SOUNDTRACK_API_TOKEN` as an environment variable on your hosting platform.
+Deploy to Render, Railway, Fly.io, or any Node.js host. Set `SOUNDTRACK_API_TOKEN` as an environment variable.
 
-#### 7. (Optional) Scope to specific accounts
+### 7. (Optional) Scope to specific accounts
 
-If you manage multiple accounts and want to limit access (e.g., for a customer deployment), set:
+Two ways to scope:
 
-```bash
-SOUNDTRACK_ACCOUNT_IDS=QWNjb3VudCwsMXN4N242NTZyeTgv,QWNjb3VudCwsMWtsMmhrdGVsOGcv
+**Via URL path** (for hosted/multi-client setups):
+```
+https://your-server.com/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp
 ```
 
-This comma-separated list of account IDs restricts all tools to only those accounts.
+**Via environment variable** (for single-client setups):
+```bash
+SOUNDTRACK_ACCOUNT_IDS=ACCOUNT_ID_1,ACCOUNT_ID_2
+```
 
 ## Available Tools
 
@@ -167,22 +188,6 @@ This comma-separated list of account IDs restricts all tools to only those accou
 | `play` | Resume playback |
 | `pause` | Pause playback |
 | `get_account_overview` | Full account/location/zone tree |
-
-## REST API Endpoints
-
-For ChatGPT and other REST clients:
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/accounts` | List all accounts |
-| GET | `/api/accounts/search?name=hilton` | Search by name |
-| GET | `/api/accounts/:id/locations` | List locations |
-| GET | `/api/accounts/:id/zones` | List sound zones |
-| GET | `/api/zones/:id/now-playing` | Current track |
-| POST | `/api/zones/:id/volume` | Set volume `{"volume": 8}` |
-| POST | `/api/zones/:id/skip` | Skip track |
-| POST | `/api/zones/:id/play` | Resume playback |
-| POST | `/api/zones/:id/pause` | Pause playback |
 
 ## Architecture
 

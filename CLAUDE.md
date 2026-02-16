@@ -3,12 +3,13 @@
 ## Project Overview
 MCP server connecting Soundtrack Your Brand's GraphQL API to Claude and ChatGPT. Natural language control of music playback across 900+ business locations managed by bmasia.
 
-## Status: Live on Claude Desktop + Claude.ai + Render
+## Status: Live on Claude Desktop + Claude.ai + ChatGPT + Render
 
 ## Deployments
 - **Claude Desktop**: stdio transport via `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Claude.ai**: HTTP transport at `https://soundtrack-mcp.onrender.com/mcp`
-- **GitHub**: https://github.com/brightears/soundtrack-mcp (private, auto-deploys to Render)
+- **ChatGPT**: REST API at `https://soundtrack-mcp.onrender.com/api/*`, OpenAPI spec at `/openapi.json`
+- **GitHub**: https://github.com/brightears/soundtrack-mcp (public, auto-deploys to Render)
 - **Render**: srv-d69dvu8gjchc73chumg0 (free plan, oregon)
 
 ## Architecture
@@ -23,7 +24,8 @@ MCP server connecting Soundtrack Your Brand's GraphQL API to Claude and ChatGPT.
 - `src/client.ts` - GraphQL client, auth, scoped account IDs helper
 - `src/queries.ts` - All GraphQL query/mutation strings
 - `src/index.ts` - stdio entry point (Claude Desktop)
-- `src/http.ts` - HTTP entry point (Render / Claude.ai)
+- `src/http.ts` - HTTP entry point (Render / Claude.ai / ChatGPT), serves MCP + REST + OpenAPI
+- `src/api.ts` - REST API router for ChatGPT Actions (Express)
 - `.env` - API credentials for local dev (NEVER commit)
 
 ## Tools (10)
@@ -39,7 +41,11 @@ MCP server connecting Soundtrack Your Brand's GraphQL API to Claude and ChatGPT.
 10. `get_account_overview` - Full tree of accounts/locations/zones
 
 ## Customer Scoping
-Set `SOUNDTRACK_ACCOUNT_IDS` env var (comma-separated account IDs) to scope the server to specific accounts. When set, tools only operate on those accounts.
+Two methods:
+- **URL path** (hosted/multi-client): `/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp` or `/c/.../api/*`
+- **Env var** (self-hosted): `SOUNDTRACK_ACCOUNT_IDS=id1,id2`
+
+URL path takes priority. Scoping affects account discovery tools (list_accounts, search_account, get_account_overview).
 
 ## Commands
 - `npm run build` - Compile TypeScript

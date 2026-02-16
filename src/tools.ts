@@ -137,8 +137,8 @@ async function searchAccountByName(
 
 // ── Register All Tools ─────────────────────────────────────────────────────
 
-export function registerTools(server: McpServer) {
-  const scopedIds = getScopedAccountIds();
+export function registerTools(server: McpServer, accountIds?: string[]) {
+  const scopedIds = accountIds ?? getScopedAccountIds();
   const isScoped = scopedIds !== null;
 
   // ── list_accounts ──────────────────────────────────────────────────────
