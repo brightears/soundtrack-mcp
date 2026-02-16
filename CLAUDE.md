@@ -1,55 +1,56 @@
 # Soundtrack MCP Server
 
 ## Project Overview
-MCP server that connects Soundtrack Your Brand's GraphQL API to Claude Desktop. Enables natural language control of music playback across 100+ business locations managed by bmasia.
+MCP server connecting Soundtrack Your Brand's GraphQL API to Claude and ChatGPT. Natural language control of music playback across 900+ business locations managed by bmasia.
 
-## Status: Live in Claude Desktop
+## Status: Live on Claude Desktop + Claude.ai + Render
+
+## Deployments
+- **Claude Desktop**: stdio transport via `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Claude.ai**: HTTP transport at `https://soundtrack-mcp.onrender.com/mcp`
+- **GitHub**: https://github.com/brightears/soundtrack-mcp (private, auto-deploys to Render)
+- **Render**: srv-d69dvu8gjchc73chumg0 (free plan, oregon)
 
 ## Architecture
-- **Type**: MCP Server (stdio transport, local)
-- **Language**: TypeScript
-- **API**: Soundtrack Your Brand GraphQL API at `https://api.soundtrackyourbrand.com/v2`
+- **Language**: TypeScript (strict mode, ES modules)
+- **SDK**: `@modelcontextprotocol/sdk` v1.26 + Zod v4 + Express
+- **Transports**: stdio (`src/index.ts`) + HTTP (`src/http.ts`)
+- **API**: Soundtrack Your Brand GraphQL at `https://api.soundtrackyourbrand.com/v2`
 - **Auth**: Basic Authentication with base64-encoded API token
-- **SDK**: `@modelcontextprotocol/sdk` v1.26 + Zod v4
-- **Config**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ## Key Files
-- `src/index.ts` - MCP server entry point + all 9 tool registrations
-- `src/client.ts` - GraphQL client with Basic auth (no dotenv — env vars passed via config)
+- `src/tools.ts` - All 10 tool registrations (shared between transports)
+- `src/client.ts` - GraphQL client, auth, scoped account IDs helper
 - `src/queries.ts` - All GraphQL query/mutation strings
-- `.env` - API credentials for local dev/testing (NEVER commit)
-- `.env.example` - Safe template
-- `docs/soundtrack-api-reference.md` - Full API reference
+- `src/index.ts` - stdio entry point (Claude Desktop)
+- `src/http.ts` - HTTP entry point (Render / Claude.ai)
+- `.env` - API credentials for local dev (NEVER commit)
 
-## Tools
-1. `list_accounts` - Browse all managed accounts
-2. `list_locations` - Get locations for an account
-3. `list_sound_zones` - Get zones + paired status for an account
-4. `get_now_playing` - Current track in a sound zone
-5. `set_volume` - Adjust volume for a zone
-6. `skip_track` - Skip to next track
-7. `play` - Resume playback
-8. `pause` - Pause playback
-9. `get_account_overview` - Full tree of all accounts/locations/zones
+## Tools (10)
+1. `list_accounts` - Browse all accounts (paginated, supports 900+)
+2. `search_account` - Search accounts by name across all pages
+3. `list_locations` - Get locations for an account
+4. `list_sound_zones` - Get zones + paired status
+5. `get_now_playing` - Current track in a zone
+6. `set_volume` - Adjust volume (0-16 typical)
+7. `skip_track` - Skip to next track
+8. `play` - Resume playback
+9. `pause` - Pause playback
+10. `get_account_overview` - Full tree of accounts/locations/zones
+
+## Customer Scoping
+Set `SOUNDTRACK_ACCOUNT_IDS` env var (comma-separated account IDs) to scope the server to specific accounts. When set, tools only operate on those accounts.
 
 ## Commands
 - `npm run build` - Compile TypeScript
 - `npm run dev` - Watch mode
-- `npm run start` - Run the server
-- `npm run inspect` - Run MCP inspector for testing
-
-## Code Style
-- TypeScript strict mode
-- ES modules (import/export)
-- Async/await for all API calls
-- Error handling: wrap GraphQL calls, return user-friendly messages
-- No emoji in code unless user requests it
+- `npm run start` - Run stdio server
+- `npm run start:http` - Run HTTP server
+- `npm run inspect` - MCP inspector
 
 ## Common Gotchas
-- **dotenv v17 breaks MCP stdio** — it prints to stdout, corrupting JSON-RPC. Pass env vars via claude_desktop_config.json `env` field instead.
-- Soundtrack API uses Relay-style pagination (edges/nodes/pageInfo)
-- Sound zone IDs are required for most operations (not location names)
-- Volume range may vary by hardware (typically 0-16)
-- `me` query shape differs for PublicAPIClient vs User auth types
+- **dotenv v17 breaks MCP stdio** — prints to stdout. Use env vars from config instead.
+- Soundtrack API uses Relay pagination (edges/nodes/pageInfo) — always paginate with `after` cursor
+- `me` query uses `...on PublicAPIClient` fragment for API token auth
 - API tokens get revoked if exposed publicly
-- Visitors cannot control playback (licensing restriction)
+- Render free tier: ~50s cold start after inactivity
