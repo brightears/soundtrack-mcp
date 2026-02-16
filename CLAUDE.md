@@ -54,9 +54,16 @@ URL path takes priority. Scoping affects account discovery tools (list_accounts,
 - `npm run start:http` - Run HTTP server
 - `npm run inspect` - MCP inspector
 
+## Security
+- Repo is **public** — audited, no secrets in git history or tracked files
+- `.env` is gitignored and was never committed
+- All credentials via environment variables only
+- Share link: https://github.com/brightears/soundtrack-mcp
+
 ## Common Gotchas
 - **dotenv v17 breaks MCP stdio** — prints to stdout. Use env vars from config instead.
 - Soundtrack API uses Relay pagination (edges/nodes/pageInfo) — always paginate with `after` cursor
 - `me` query uses `...on PublicAPIClient` fragment for API token auth
 - API tokens get revoked if exposed publicly
 - Render free tier: ~50s cold start after inactivity
+- Express 5 types: `req.params` values are `string | string[]` — cast with `as string`
