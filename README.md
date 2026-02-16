@@ -2,7 +2,7 @@
 
 Control music playback across your business locations with AI. This MCP server connects [Soundtrack Your Brand](https://www.soundtrackyourbrand.com/) to Claude, ChatGPT, and any MCP-compatible AI assistant.
 
-> **Built by [bmasia](https://github.com/brightears)** — a Soundtrack Your Brand reseller managing 900+ locations across Asia Pacific.
+> **Built by [bmasia](https://github.com/brightears)** — a Soundtrack Your Brand reseller.
 
 ## What Can It Do?
 
