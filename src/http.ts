@@ -405,12 +405,12 @@ async function handleMcpPost(req: Request, res: Response, accountIds?: string[])
     };
 
     await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
 
+    // Session ID is set during handleRequest (initialize), so store after
     if (transport.sessionId) {
       transports.set(transport.sessionId, transport);
     }
-
-    await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error("MCP error:", error);
     if (!res.headersSent) {
