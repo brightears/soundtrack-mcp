@@ -3,28 +3,31 @@
 ## Project Overview
 MCP server connecting Soundtrack Your Brand's GraphQL API to Claude and ChatGPT. Natural language control of music playback across 900+ business locations managed by bmasia.
 
-## Status: Live on Claude Desktop + Claude.ai + ChatGPT + Render
+## Status: Live on Claude Desktop + Claude.ai + Render
 
 ## Deployments
 - **Claude Desktop**: stdio transport via `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Claude.ai**: HTTP transport at `https://soundtrack-mcp.onrender.com/mcp`
-- **ChatGPT**: REST API at `https://soundtrack-mcp.onrender.com/api/*`, OpenAPI spec at `/openapi.json`
+- **Claude.ai**: MCP Connector with OAuth at `https://soundtrack-mcp.onrender.com/mcp`
+- **ChatGPT**: MCP Connector (same URL, needs Developer mode setup)
+- **REST API**: `https://soundtrack-mcp.onrender.com/api/*`, OpenAPI spec at `/openapi.json`
 - **GitHub**: https://github.com/brightears/soundtrack-mcp (public, auto-deploys to Render)
-- **Render**: srv-d69dvu8gjchc73chumg0 (free plan, oregon)
+- **Render**: srv-d69dvu8gjchc73chumg0 (paid plan, oregon)
 
 ## Architecture
 - **Language**: TypeScript (strict mode, ES modules)
 - **SDK**: `@modelcontextprotocol/sdk` v1.26 + Zod v4 + Express
 - **Transports**: stdio (`src/index.ts`) + HTTP (`src/http.ts`)
 - **API**: Soundtrack Your Brand GraphQL at `https://api.soundtrackyourbrand.com/v2`
-- **Auth**: Basic Authentication with base64-encoded API token
+- **Auth**: Basic Authentication with base64-encoded API token (Soundtrack API)
+- **OAuth**: Auto-approving OAuth 2.1 provider for Claude.ai/ChatGPT Connectors (`src/auth.ts`)
 
 ## Key Files
 - `src/tools.ts` - All 10 tool registrations (shared between transports)
 - `src/client.ts` - GraphQL client, auth, scoped account IDs helper
 - `src/queries.ts` - All GraphQL query/mutation strings
 - `src/index.ts` - stdio entry point (Claude Desktop)
-- `src/http.ts` - HTTP entry point (Render / Claude.ai / ChatGPT), serves MCP + REST + OpenAPI
+- `src/http.ts` - HTTP entry point (Render / Claude.ai / ChatGPT), serves MCP + REST + OpenAPI + OAuth
+- `src/auth.ts` - OAuth 2.1 provider (auto-approving, in-memory tokens, DCR support)
 - `src/api.ts` - REST API router for ChatGPT Actions (Express)
 - `.env` - API credentials for local dev (NEVER commit)
 
@@ -62,8 +65,9 @@ URL path takes priority. Scoping affects account discovery tools (list_accounts,
 
 ## Common Gotchas
 - **dotenv v17 breaks MCP stdio** — prints to stdout. Use env vars from config instead.
+- **StreamableHTTP session ID** is set during `handleRequest`, not `connect` — store transport AFTER handleRequest
+- **Claude.ai drops Bearer token** after OAuth (bug #2157) — bearer auth is optional on MCP routes
 - Soundtrack API uses Relay pagination (edges/nodes/pageInfo) — always paginate with `after` cursor
 - `me` query uses `...on PublicAPIClient` fragment for API token auth
 - API tokens get revoked if exposed publicly
-- Render free tier: ~50s cold start after inactivity
 - Express 5 types: `req.params` values are `string | string[]` — cast with `as string`

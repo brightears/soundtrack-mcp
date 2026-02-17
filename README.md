@@ -2,7 +2,7 @@
 
 Control music playback across your business locations with AI. This MCP server connects [Soundtrack Your Brand](https://www.soundtrackyourbrand.com/) to Claude, ChatGPT, and any MCP-compatible AI assistant.
 
-> **Built by [bmasia](https://bmasiamusic.com)** — a Soundtrack Your Brand reseller.
+> **Built by [bmasia](https://bmasiamusic.com)** — a Soundtrack Your Brand reseller managing 900+ locations across Asia.
 
 ## What Can It Do?
 
@@ -14,17 +14,15 @@ Talk to your AI assistant in natural language:
 - *"Pause music in all zones"*
 - *"Show me all my sound zones"*
 
+---
+
 ## Quick Start for bmasia Clients
 
-If your account is managed by bmasia, you can use our hosted server. You just need your **account ID** — a string that looks like `QWNjb3VudCwsMXN4N242NTZyeTgv`.
+If your account is managed by bmasia, you can connect in minutes using our hosted server. No setup, no API keys, no hosting required.
 
-**How to find your account ID:**
-- Ask your bmasia representative — they'll send you a ready-to-use URL
-- Or find it in your Soundtrack Your Brand dashboard URL (the long code after `/accounts/`)
+You just need your **account ID** — a string that looks like `QWNjb3VudCwsMXN4N242NTZyeTgv`. Ask your bmasia representative and they'll send you a ready-to-use URL.
 
 Replace `YOUR_ACCOUNT_ID` below with your actual account ID.
-
----
 
 ### Claude Desktop
 
@@ -46,25 +44,24 @@ Edit your config file:
 
 Restart Claude Desktop. You'll see "soundtrack" in your connectors.
 
-### Claude.ai (web)
+### Claude.ai (web & mobile)
 
-1. Go to [claude.ai](https://claude.ai) > Settings > Integrations
-2. Add integration > Custom MCP server
+1. Go to [claude.ai](https://claude.ai) > **Settings** > **Connectors**
+2. Click **Add custom connector**
 3. Enter the URL: `https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/mcp`
-4. Save and start a new chat
+4. Click **Add** — OAuth will complete automatically
+5. Start a new chat and try: *"What's playing right now?"*
 
 ### ChatGPT
 
-1. Go to [ChatGPT](https://chat.openai.com) > Explore GPTs > Create a GPT
-2. Go to **Configure** > **Actions** > **Create new action**
-3. Click **Import from URL** and paste:
+1. Go to [chatgpt.com](https://chatgpt.com) > **Settings** > **Apps**
+2. Enable **Developer mode** (requires ChatGPT Plus)
+3. Click **Add connector** and enter the URL:
    ```
-   https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/openapi.json
+   https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/mcp
    ```
-4. Set Authentication to **None**
-5. Save and try: *"What's currently playing?"*
-
-> **Note:** The hosted server on Render's free tier may take ~50 seconds to wake up after inactivity. Subsequent requests are fast.
+4. OAuth will complete automatically
+5. Start a new chat and try: *"Show me my sound zones"*
 
 ### Multiple accounts
 
@@ -74,11 +71,15 @@ If you manage several accounts, separate them with commas:
 https://soundtrack-mcp.onrender.com/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp
 ```
 
+### Account isolation
+
+Each scoped URL only has access to the specified account(s). Hotel A cannot see Hotel B's data — they each get their own URL with their own account ID.
+
 ---
 
-## Self-Hosting (non-bmasia users)
+## Self-Hosting (for non-bmasia users)
 
-If you have your own Soundtrack Your Brand API credentials, you can run the server yourself.
+If you're **not** a bmasia client, you'll need your own Soundtrack Your Brand API credentials and your own server. The hosted bmasia server uses bmasia's API key, which only works for bmasia-managed accounts.
 
 ### 1. Get API credentials
 
@@ -116,7 +117,7 @@ SOUNDTRACK_API_TOKEN=your_base64_encoded_token_here
 npm run build
 ```
 
-### 5. Connect to Claude Desktop
+### 5. Connect to Claude Desktop (local)
 
 Edit your config:
 
@@ -139,32 +140,34 @@ Edit your config:
 
 Restart Claude Desktop.
 
-### 6. (Optional) Run as HTTP server
+### 6. Deploy as HTTP server (for web/mobile access)
 
-For Claude.ai, ChatGPT, or any remote client:
+To use with Claude.ai, ChatGPT, or any remote MCP client, deploy the HTTP server:
 
 ```bash
 npm run start:http
 ```
 
-Starts on port 3000 (or `PORT` env var) with:
+Starts on port 3000 (or `PORT` env var). The server includes built-in OAuth 2.1 support required by Claude.ai and ChatGPT.
 
 | Endpoint | Use with |
 |----------|----------|
-| `/mcp` | Claude.ai, MCP clients |
-| `/api/*` | ChatGPT Actions (REST) |
-| `/openapi.json` | ChatGPT GPT setup |
+| `/mcp` | Claude.ai, ChatGPT, MCP clients |
+| `/api/*` | REST API |
+| `/openapi.json` | OpenAPI spec |
 | `/c/{accountIds}/mcp` | Scoped MCP (per-client) |
 | `/c/{accountIds}/api/*` | Scoped REST (per-client) |
 | `/health` | Health checks |
 
 Deploy to Render, Railway, Fly.io, or any Node.js host. Set `SOUNDTRACK_API_TOKEN` as an environment variable.
 
+Once deployed, add it as a connector in Claude.ai or ChatGPT using your server's URL (e.g. `https://your-server.com/mcp`).
+
 ### 7. (Optional) Scope to specific accounts
 
-Two ways to scope:
+Two ways to limit which accounts are visible:
 
-**Via URL path** (for hosted/multi-client setups):
+**Via URL path** (for multi-client setups):
 ```
 https://your-server.com/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp
 ```
@@ -196,9 +199,10 @@ src/
   client.ts    GraphQL client + auth
   queries.ts   GraphQL queries & mutations
   tools.ts     MCP tool definitions (shared)
+  auth.ts      OAuth 2.1 provider (auto-approving)
   index.ts     stdio entry point (Claude Desktop)
   http.ts      HTTP entry point (Claude.ai / ChatGPT / remote)
-  api.ts       REST API router (ChatGPT Actions)
+  api.ts       REST API router
 ```
 
 Built with:
