@@ -27,8 +27,15 @@ app.use(
   })
 );
 
-// Bearer token middleware for MCP routes
-const bearerAuth = requireBearerAuth({ verifier: oauthProvider });
+// Optional bearer auth: verify token if present, allow through if not.
+// Workaround for Claude.ai bug where Bearer token is dropped after OAuth.
+// Real security is the server-side Soundtrack API token, not OAuth tokens.
+const optionalBearerAuth = (req: Request, res: Response, next: NextFunction) => {
+  if (req.headers.authorization) {
+    return requireBearerAuth({ verifier: oauthProvider })(req, res, next);
+  }
+  next();
+};
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -429,17 +436,17 @@ async function handleMcpSession(req: Request, res: Response) {
 }
 
 // Scoped MCP routes (with OAuth)
-app.post("/c/:accountIds/mcp", bearerAuth, (req, res) => {
+app.post("/c/:accountIds/mcp", optionalBearerAuth, (req, res) => {
   const accountIds = parseAccountIds(req.params.accountIds as string);
   handleMcpPost(req, res, accountIds);
 });
-app.get("/c/:accountIds/mcp", bearerAuth, handleMcpSession);
-app.delete("/c/:accountIds/mcp", bearerAuth, handleMcpSession);
+app.get("/c/:accountIds/mcp", optionalBearerAuth, handleMcpSession);
+app.delete("/c/:accountIds/mcp", optionalBearerAuth, handleMcpSession);
 
 // Unscoped MCP routes (with OAuth)
-app.post("/mcp", bearerAuth, (req, res) => handleMcpPost(req, res));
-app.get("/mcp", bearerAuth, handleMcpSession);
-app.delete("/mcp", bearerAuth, handleMcpSession);
+app.post("/mcp", optionalBearerAuth, (req, res) => handleMcpPost(req, res));
+app.get("/mcp", optionalBearerAuth, handleMcpSession);
+app.delete("/mcp", optionalBearerAuth, handleMcpSession);
 
 // ── Start ──────────────────────────────────────────────────────────────────
 
