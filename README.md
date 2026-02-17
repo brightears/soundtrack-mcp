@@ -20,9 +20,7 @@ Talk to your AI assistant in natural language:
 
 If your account is managed by bmasia, you can connect in minutes using our hosted server. No setup, no API keys, no hosting required.
 
-You just need your **account ID** — a string that looks like `QWNjb3VudCwsMXN4N242NTZyeTgv`. Ask your bmasia representative and they'll send you a ready-to-use URL.
-
-Replace `YOUR_ACCOUNT_ID` below with your actual account ID.
+Ask your bmasia representative — they'll send you the **server URL** and your **account ID**. Replace `YOUR_SERVER` and `YOUR_ACCOUNT_ID` in the examples below.
 
 ### Claude Desktop
 
@@ -36,7 +34,7 @@ Edit your config file:
   "mcpServers": {
     "soundtrack": {
       "type": "url",
-      "url": "https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/mcp"
+      "url": "https://YOUR_SERVER/c/YOUR_ACCOUNT_ID/mcp"
     }
   }
 }
@@ -48,7 +46,7 @@ Restart Claude Desktop. You'll see "soundtrack" in your connectors.
 
 1. Go to [claude.ai](https://claude.ai) > **Settings** > **Connectors**
 2. Click **Add custom connector**
-3. Enter the URL: `https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/mcp`
+3. Enter the URL: `https://YOUR_SERVER/c/YOUR_ACCOUNT_ID/mcp`
 4. Click **Add** — OAuth will complete automatically
 5. Start a new chat and try: *"What's playing right now?"*
 
@@ -58,7 +56,7 @@ Restart Claude Desktop. You'll see "soundtrack" in your connectors.
 2. Enable **Developer mode** (requires ChatGPT Plus)
 3. Click **Add connector** and enter the URL:
    ```
-   https://soundtrack-mcp.onrender.com/c/YOUR_ACCOUNT_ID/mcp
+   https://YOUR_SERVER/c/YOUR_ACCOUNT_ID/mcp
    ```
 4. OAuth will complete automatically
 5. Start a new chat and try: *"Show me my sound zones"*
@@ -68,7 +66,7 @@ Restart Claude Desktop. You'll see "soundtrack" in your connectors.
 If you manage several accounts, separate them with commas:
 
 ```
-https://soundtrack-mcp.onrender.com/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp
+https://YOUR_SERVER/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp
 ```
 
 ### Account isolation
