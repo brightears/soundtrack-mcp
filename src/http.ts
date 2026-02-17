@@ -3,14 +3,32 @@
 import express, { Request, Response, NextFunction } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
+import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import { registerTools } from "./tools.js";
+import { oauthProvider } from "./auth.js";
 import { randomUUID } from "crypto";
 import apiRouter from "./api.js";
 
 const PORT = process.env.PORT || 3000;
+const BASE_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
 
 const app = express();
 app.use(express.json());
+
+// ── OAuth 2.1 (for Claude.ai / ChatGPT Connectors) ─────────────────────────
+
+app.use(
+  mcpAuthRouter({
+    provider: oauthProvider,
+    issuerUrl: new URL(BASE_URL),
+    scopesSupported: ["mcp:tools"],
+    resourceName: "Soundtrack MCP",
+  })
+);
+
+// Bearer token middleware for MCP routes
+const bearerAuth = requireBearerAuth({ verifier: oauthProvider });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -410,18 +428,18 @@ async function handleMcpSession(req: Request, res: Response) {
   res.status(400).json({ error: "No valid session. Send a POST first." });
 }
 
-// Scoped MCP routes
-app.post("/c/:accountIds/mcp", (req, res) => {
+// Scoped MCP routes (with OAuth)
+app.post("/c/:accountIds/mcp", bearerAuth, (req, res) => {
   const accountIds = parseAccountIds(req.params.accountIds as string);
   handleMcpPost(req, res, accountIds);
 });
-app.get("/c/:accountIds/mcp", handleMcpSession);
-app.delete("/c/:accountIds/mcp", handleMcpSession);
+app.get("/c/:accountIds/mcp", bearerAuth, handleMcpSession);
+app.delete("/c/:accountIds/mcp", bearerAuth, handleMcpSession);
 
-// Unscoped MCP routes
-app.post("/mcp", (req, res) => handleMcpPost(req, res));
-app.get("/mcp", handleMcpSession);
-app.delete("/mcp", handleMcpSession);
+// Unscoped MCP routes (with OAuth)
+app.post("/mcp", bearerAuth, (req, res) => handleMcpPost(req, res));
+app.get("/mcp", bearerAuth, handleMcpSession);
+app.delete("/mcp", bearerAuth, handleMcpSession);
 
 // ── Start ──────────────────────────────────────────────────────────────────
 
