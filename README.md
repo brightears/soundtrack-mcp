@@ -179,7 +179,7 @@ SOUNDTRACK_ACCOUNT_IDS=ACCOUNT_ID_1,ACCOUNT_ID_2
 
 | Tool | Description |
 |------|-------------|
-| `list_accounts` | List all accounts (paginated for 900+) |
+| `list_accounts` | List all accounts |
 | `search_account` | Search accounts by business name |
 | `list_locations` | List locations for an account |
 | `list_sound_zones` | List sound zones with pairing status |
