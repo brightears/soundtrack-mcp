@@ -1,8 +1,8 @@
 # Soundtrack MCP Server
 
-Control music playback across your business locations with AI. This MCP server connects [Soundtrack Your Brand](https://www.soundtrackyourbrand.com/) to Claude, ChatGPT, and any MCP-compatible AI assistant.
+Control music playback across your business locations with AI. This MCP server connects [Soundtrack](https://www.soundtrack.io/) to Claude, ChatGPT, and any MCP-compatible AI assistant.
 
-> **Built by [bmasia](https://bmasiamusic.com)** — a Soundtrack Your Brand reseller managing 900+ locations across Asia.
+> **Built by [bmasia](https://bmasiamusic.com)** — a Soundtrack reseller.
 
 ## What Can It Do?
 
@@ -77,11 +77,11 @@ Each scoped URL only has access to the specified account(s). Hotel A cannot see 
 
 ## Self-Hosting (for non-bmasia users)
 
-If you're **not** a bmasia client, you'll need your own Soundtrack Your Brand API credentials and your own server. The hosted bmasia server uses bmasia's API key, which only works for bmasia-managed accounts.
+If you're **not** a bmasia client, you'll need your own Soundtrack API credentials and your own server. The hosted bmasia server uses bmasia's API key, which only works for bmasia-managed accounts.
 
 ### 1. Get API credentials
 
-Apply for API access at [soundtrackyourbrand.com/our-api/apply](https://www.soundtrackyourbrand.com/our-api/apply). You'll receive a Client ID and Client Secret.
+Apply for API access at [soundtrack.io/our-api/apply](https://www.soundtrack.io/our-api/apply). You'll receive a Client ID and Client Secret.
 
 Create a base64-encoded token:
 
@@ -205,7 +205,7 @@ src/
 
 Built with:
 - [Model Context Protocol SDK](https://github.com/modelcontextprotocol/typescript-sdk) v1.26
-- [Soundtrack Your Brand GraphQL API](https://www.soundtrackyourbrand.com/our-api)
+- [Soundtrack GraphQL API](https://www.soundtrack.io/our-api)
 - TypeScript, Express, Zod
 
 ## Development
