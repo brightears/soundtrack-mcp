@@ -1,6 +1,6 @@
 # Soundtrack MCP Server
 
-Control music playback across your business locations with AI. This MCP server connects [Soundtrack](https://www.soundtrack.io/) to Claude, ChatGPT, and any MCP-compatible AI assistant.
+Full music management for your business locations with AI. This MCP server connects [Soundtrack](https://www.soundtrack.io/) to Claude, ChatGPT, and any MCP-compatible AI assistant — playback control, music discovery, schedule creation, zone assignment, and more.
 
 > **Built by [bmasia](https://bmasiamusic.com)** — a Soundtrack reseller.
 
@@ -10,8 +10,10 @@ Talk to your AI assistant in natural language:
 
 - *"What's playing at the lobby right now?"*
 - *"Turn the volume down to 5 in the restaurant zone"*
-- *"Skip this track in the bar"*
-- *"Pause music in all zones"*
+- *"Search for chill jazz playlists"*
+- *"Create a weekly schedule: jazz mornings, lounge evenings"*
+- *"Assign that schedule to the lobby zone"*
+- *"Queue a specific track to play next"*
 - *"Show me all my sound zones"*
 
 ---
@@ -175,20 +177,61 @@ https://your-server.com/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp
 SOUNDTRACK_ACCOUNT_IDS=ACCOUNT_ID_1,ACCOUNT_ID_2
 ```
 
-## Available Tools
+## Available Tools (26)
 
+### Discovery
 | Tool | Description |
 |------|-------------|
 | `list_accounts` | List all accounts |
 | `search_account` | Search accounts by business name |
 | `list_locations` | List locations for an account |
 | `list_sound_zones` | List sound zones with pairing status |
+| `get_account_overview` | Full account/location/zone tree |
+
+### Playback Control
+| Tool | Description |
+|------|-------------|
 | `get_now_playing` | Current track in a sound zone |
 | `set_volume` | Set volume (typically 0-16) |
 | `skip_track` | Skip to next track |
 | `play` | Resume playback |
 | `pause` | Pause playback |
-| `get_account_overview` | Full account/location/zone tree |
+
+### Library & Music Discovery
+| Tool | Description |
+|------|-------------|
+| `list_playlists` | List playlists in an account's music library |
+| `list_schedules` | List schedules in an account's music library |
+| `search_music` | Search the Soundtrack catalog (playlists, tracks, artists, albums) |
+| `browse_categories` | Browse music categories with curated playlists |
+| `get_playlist_tracks` | See the tracks inside a playlist |
+
+### Schedule Management
+| Tool | Description |
+|------|-------------|
+| `create_schedule` | Create a music schedule with time slots (supports daily/weekday/weekend/custom days) |
+| `update_schedule` | Update an existing schedule (replaces all slots) |
+| `get_schedule_details` | See the time slots inside a schedule |
+
+### Zone Assignment
+| Tool | Description |
+|------|-------------|
+| `assign_source` | Assign a schedule or playlist to one or more zones |
+| `get_zone_source` | See what schedule/playlist is assigned to a zone |
+
+### Content Management
+| Tool | Description |
+|------|-------------|
+| `create_playlist` | Create a custom manual playlist, optionally with tracks |
+| `queue_tracks` | Queue specific tracks to play next in a zone |
+| `block_track` | Block a track from playing in a zone |
+| `add_to_library` | Add a playlist or schedule to an account's library |
+| `remove_from_library` | Remove a playlist or schedule from an account's library |
+
+### AI Features
+| Tool | Description |
+|------|-------------|
+| `generate_playlist` | Generate a playlist from a text description using Soundtrack's AI |
 
 ## Architecture
 
