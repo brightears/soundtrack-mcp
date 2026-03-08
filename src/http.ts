@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(express.json());
 
 // ── OAuth 2.1 (for Claude.ai / ChatGPT Connectors) ─────────────────────────
