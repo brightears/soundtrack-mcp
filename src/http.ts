@@ -49,7 +49,7 @@ function buildOpenApiSpec(baseUrl: string) {
     info: {
       title: "Soundtrack Your Brand",
       description:
-        "Control music playback across business locations via Soundtrack Your Brand. Search accounts, check what's playing, adjust volume, skip tracks, and manage playback.",
+        "Full music management for business locations via Soundtrack. Browse accounts, control playback, search music, create schedules, assign playlists to zones, and generate AI playlists.",
       version: "1.0.0",
     },
     servers: [{ url: baseUrl }],
@@ -327,6 +327,151 @@ function buildOpenApiSpec(baseUrl: string) {
               content: { "application/json": { schema: { type: "object" } } },
             },
           },
+        },
+      },
+      "/api/accounts/{accountId}/playlists": {
+        get: {
+          operationId: "listPlaylists",
+          summary: "List playlists in an account's music library",
+          parameters: [{ name: "accountId", in: "path", required: true, schema: { type: "string" } }],
+          responses: { "200": { description: "Playlists", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+        post: {
+          operationId: "createPlaylist",
+          summary: "Create a manual playlist",
+          parameters: [{ name: "accountId", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["name"], properties: { name: { type: "string" }, description: { type: "string" }, track_ids: { type: "array", items: { type: "string" } } } } } } },
+          responses: { "200": { description: "Created playlist", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/accounts/{accountId}/schedules": {
+        get: {
+          operationId: "listSchedules",
+          summary: "List schedules in an account's music library",
+          parameters: [{ name: "accountId", in: "path", required: true, schema: { type: "string" } }],
+          responses: { "200": { description: "Schedules", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+        post: {
+          operationId: "createSchedule",
+          summary: "Create a music schedule with time slots",
+          parameters: [{ name: "accountId", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["name", "slots"], properties: { name: { type: "string" }, description: { type: "string" }, slots: { type: "array", items: { type: "object", properties: { playlist_id: { type: "string" }, days: { type: "string" }, start_time: { type: "string" }, duration_hours: { type: "number" } } } } } } } } },
+          responses: { "200": { description: "Created schedule", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/schedules/{scheduleId}": {
+        get: {
+          operationId: "getScheduleDetails",
+          summary: "Get schedule details including time slots",
+          parameters: [{ name: "scheduleId", in: "path", required: true, schema: { type: "string" } }],
+          responses: { "200": { description: "Schedule details", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+        put: {
+          operationId: "updateSchedule",
+          summary: "Update an existing schedule",
+          parameters: [{ name: "scheduleId", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, slots: { type: "array", items: { type: "object" } } } } } } },
+          responses: { "200": { description: "Updated schedule", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/search": {
+        get: {
+          operationId: "searchMusic",
+          summary: "Search the Soundtrack music catalog",
+          parameters: [
+            { name: "query", in: "query", required: true, schema: { type: "string" }, description: "Search query" },
+            { name: "type", in: "query", schema: { type: "string", enum: ["playlist", "track", "artist", "album"] }, description: "Content type to search for" },
+            { name: "limit", in: "query", schema: { type: "integer" }, description: "Number of results" },
+          ],
+          responses: { "200": { description: "Search results", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/categories": {
+        get: {
+          operationId: "browseCategories",
+          summary: "Browse music categories",
+          responses: { "200": { description: "Music categories", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/categories/{categoryId}/playlists": {
+        get: {
+          operationId: "browseCategoryPlaylists",
+          summary: "List playlists in a category",
+          parameters: [{ name: "categoryId", in: "path", required: true, schema: { type: "string" } }],
+          responses: { "200": { description: "Category playlists", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/playlists/{playlistId}/tracks": {
+        get: {
+          operationId: "getPlaylistTracks",
+          summary: "Get tracks inside a playlist",
+          parameters: [
+            { name: "playlistId", in: "path", required: true, schema: { type: "string" } },
+            { name: "limit", in: "query", schema: { type: "integer" }, description: "Number of tracks" },
+          ],
+          responses: { "200": { description: "Playlist tracks", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/zones/assign-source": {
+        post: {
+          operationId: "assignSource",
+          summary: "Assign a schedule or playlist to sound zones",
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["sound_zone_ids", "source_id"], properties: { sound_zone_ids: { type: "array", items: { type: "string" } }, source_id: { type: "string" } } } } } },
+          responses: { "200": { description: "Source assigned", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/zones/{zoneId}/source": {
+        get: {
+          operationId: "getZoneSource",
+          summary: "Get the music source assigned to a zone",
+          parameters: [{ name: "zoneId", in: "path", required: true, schema: { type: "string" } }],
+          responses: { "200": { description: "Zone source", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/zones/{zoneId}/queue": {
+        post: {
+          operationId: "queueTracks",
+          summary: "Queue tracks in a sound zone",
+          parameters: [{ name: "zoneId", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["track_ids"], properties: { track_ids: { type: "array", items: { type: "string" } }, play_next: { type: "boolean" } } } } } },
+          responses: { "200": { description: "Tracks queued", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/zones/{zoneId}/block": {
+        post: {
+          operationId: "blockTrack",
+          summary: "Block a track from playing in a zone",
+          parameters: [{ name: "zoneId", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["track_id"], properties: { track_id: { type: "string" } } } } } },
+          responses: { "200": { description: "Track blocked", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/accounts/{accountId}/library": {
+        post: {
+          operationId: "addToLibrary",
+          summary: "Add a schedule or playlist to the music library",
+          parameters: [{ name: "accountId", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["source_id"], properties: { source_id: { type: "string" } } } } } },
+          responses: { "200": { description: "Added to library", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/accounts/{accountId}/library/{sourceId}": {
+        delete: {
+          operationId: "removeFromLibrary",
+          summary: "Remove from music library",
+          parameters: [
+            { name: "accountId", in: "path", required: true, schema: { type: "string" } },
+            { name: "sourceId", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: { "200": { description: "Removed", content: { "application/json": { schema: { type: "object" } } } } },
+        },
+      },
+      "/api/generate-playlist": {
+        post: {
+          operationId: "generatePlaylist",
+          summary: "Generate a playlist from a text description using AI",
+          requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["prompt"], properties: { prompt: { type: "string", description: "Describe the music you want" }, market: { type: "string", description: "Country code (e.g. US, TH)" } } } } } },
+          responses: { "200": { description: "Generated playlists", content: { "application/json": { schema: { type: "object" } } } } },
         },
       },
     },

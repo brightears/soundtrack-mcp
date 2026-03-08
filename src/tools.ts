@@ -51,6 +51,36 @@ function text(content: string) {
   return { content: [{ type: "text" as const, text: content }] };
 }
 
+// Convert simplified slot format to Soundtrack API format
+function convertSlots(
+  slots: Array<{
+    playlist_id: string;
+    days: string;
+    start_time: string;
+    duration_hours: number;
+  }>
+) {
+  const DAY_MAP: Record<string, string> = {
+    daily: "MO,TU,WE,TH,FR,SA,SU",
+    weekdays: "MO,TU,WE,TH,FR",
+    weekends: "SA,SU",
+  };
+
+  return slots.map((s) => {
+    const days = DAY_MAP[s.days] || s.days;
+    const [hh, mm] = s.start_time.split(":");
+    const start = `${hh.padStart(2, "0")}${(mm || "00").padStart(2, "0")}00`;
+    const duration = Math.round(s.duration_hours * 3600000);
+
+    return {
+      rrule: `FREQ=WEEKLY;BYDAY=${days}`,
+      start,
+      duration,
+      playlistIds: [s.playlist_id],
+    };
+  });
+}
+
 // Fetch accounts by specific IDs (for scoped mode)
 async function fetchAccountsByIds(ids: string[]): Promise<Account[]> {
   const results: Account[] = [];
@@ -467,6 +497,697 @@ export function registerTools(server: McpServer, accountIds?: string[]) {
       const summary = `Summary: ${accounts.length} accounts, ${totalLocations} locations, ${totalZones} sound zones (${pairedZones} paired)`;
 
       return text(`${summary}\n\n${sections.join("\n\n")}`);
+    }
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Category A: Library & Discovery
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── list_playlists ────────────────────────────────────────────────────────
+
+  server.tool(
+    "list_playlists",
+    "List playlists in an account's music library. Requires an account ID. Use these playlist IDs with create_schedule or assign_source.",
+    {
+      account_id: z
+        .string()
+        .describe("The account ID to list playlists for"),
+    },
+    async ({ account_id }) => {
+      const res = await graphql<{
+        account: {
+          businessName: string;
+          musicLibrary: {
+            playlists: { edges: Array<{ node: { id: string; name: string } }> };
+          };
+        };
+      }>(Q.LIST_PLAYLISTS, { accountId: account_id, first: 50 });
+
+      const account = res.data!.account;
+      const playlists = extractNodes(account.musicLibrary.playlists);
+
+      if (playlists.length === 0) {
+        return text(
+          `No playlists found in ${account.businessName.trim()}'s music library. Use search_music to find playlists from the Soundtrack catalog.`
+        );
+      }
+
+      const lines = playlists.map(
+        (p, i) => `${i + 1}. ${p.name}\n   ID: ${p.id}`
+      );
+
+      return text(
+        `${account.businessName.trim()} - ${playlists.length} playlist(s):\n\n${lines.join("\n\n")}`
+      );
+    }
+  );
+
+  // ── list_schedules ────────────────────────────────────────────────────────
+
+  server.tool(
+    "list_schedules",
+    "List schedules in an account's music library. Requires an account ID. Use get_schedule_details to see a schedule's time slots.",
+    {
+      account_id: z
+        .string()
+        .describe("The account ID to list schedules for"),
+    },
+    async ({ account_id }) => {
+      const res = await graphql<{
+        account: {
+          businessName: string;
+          musicLibrary: {
+            schedules: { edges: Array<{ node: { id: string; name: string } }> };
+          };
+        };
+      }>(Q.LIST_SCHEDULES, { accountId: account_id, first: 50 });
+
+      const account = res.data!.account;
+      const schedules = extractNodes(account.musicLibrary.schedules);
+
+      if (schedules.length === 0) {
+        return text(
+          `No schedules found in ${account.businessName.trim()}'s music library. Use create_schedule to create one.`
+        );
+      }
+
+      const lines = schedules.map(
+        (s, i) => `${i + 1}. ${s.name}\n   ID: ${s.id}`
+      );
+
+      return text(
+        `${account.businessName.trim()} - ${schedules.length} schedule(s):\n\n${lines.join("\n\n")}`
+      );
+    }
+  );
+
+  // ── search_music ──────────────────────────────────────────────────────────
+
+  server.tool(
+    "search_music",
+    "Search the Soundtrack music catalog for playlists, tracks, artists, or albums. Returns IDs you can use with other tools (e.g. playlist IDs for create_schedule, track IDs for queue_tracks).",
+    {
+      query: z
+        .string()
+        .describe("Search query (e.g. 'jazz', 'chill lounge', 'bossa nova')"),
+      type: z
+        .enum(["playlist", "track", "artist", "album"])
+        .default("playlist")
+        .describe("Type of content to search for"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .default(10)
+        .describe("Number of results to return (default 10, max 50)"),
+    },
+    async ({ query, type, limit }) => {
+      const res = await graphql<{
+        search: {
+          edges: Array<{
+            node: {
+              __typename: string;
+              id: string;
+              name: string;
+              artists?: Array<{ name: string }>;
+            };
+          }>;
+        };
+      }>(Q.SEARCH_MUSIC, { query, type, first: limit });
+
+      const results = res.data!.search.edges.map((e) => e.node);
+
+      if (results.length === 0) {
+        return text(`No ${type}s found matching "${query}".`);
+      }
+
+      const lines = results.map((r, i) => {
+        const artists =
+          r.artists && r.artists.length > 0
+            ? ` by ${r.artists.map((a) => a.name).join(", ")}`
+            : "";
+        return `${i + 1}. ${r.name}${artists}\n   ID: ${r.id}`;
+      });
+
+      return text(
+        `Found ${results.length} ${type}(s) matching "${query}":\n\n${lines.join("\n\n")}`
+      );
+    }
+  );
+
+  // ── browse_categories ─────────────────────────────────────────────────────
+
+  server.tool(
+    "browse_categories",
+    "Browse music categories from the Soundtrack catalog. Each category contains curated playlists. Pass a category_id to see its playlists, or omit it to list all categories.",
+    {
+      category_id: z
+        .string()
+        .optional()
+        .describe(
+          "A category ID to browse playlists within. Omit to list all categories."
+        ),
+    },
+    async ({ category_id }) => {
+      if (category_id) {
+        const res = await graphql<{
+          browseCategory: {
+            name: string;
+            playlists: {
+              edges: Array<{ node: { id: string; name: string } }>;
+            };
+          };
+        }>(Q.BROWSE_CATEGORY_PLAYLISTS, { id: category_id, first: 30 });
+
+        const cat = res.data!.browseCategory;
+        const playlists = cat.playlists.edges.map((e) => e.node);
+
+        if (playlists.length === 0) {
+          return text(`No playlists found in category "${cat.name}".`);
+        }
+
+        const lines = playlists.map(
+          (p, i) => `${i + 1}. ${p.name}\n   ID: ${p.id}`
+        );
+
+        return text(
+          `${cat.name} - ${playlists.length} playlist(s):\n\n${lines.join("\n\n")}`
+        );
+      }
+
+      const res = await graphql<{
+        browseCategories: {
+          edges: Array<{ node: { id: string; name: string; slug: string } }>;
+        };
+      }>(Q.BROWSE_CATEGORIES, {});
+
+      const categories = res.data!.browseCategories.edges.map((e) => e.node);
+
+      if (!categories || categories.length === 0) {
+        return text("No categories found.");
+      }
+
+      const lines = categories.map(
+        (c, i) => `${i + 1}. ${c.name}\n   ID: ${c.id}`
+      );
+
+      return text(
+        `${categories.length} music categories:\n\n${lines.join("\n\n")}`
+      );
+    }
+  );
+
+  // ── get_playlist_tracks ───────────────────────────────────────────────────
+
+  server.tool(
+    "get_playlist_tracks",
+    "See the tracks inside a playlist. Requires a playlist ID (get it from list_playlists or search_music).",
+    {
+      playlist_id: z.string().describe("The playlist ID to get tracks for"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .default(20)
+        .describe("Number of tracks to return (default 20, max 100)"),
+    },
+    async ({ playlist_id, limit }) => {
+      const res = await graphql<{
+        playlist: {
+          name: string;
+          tracks: {
+            edges: Array<{
+              node: {
+                id: string;
+                name: string;
+                artists: Array<{ name: string }>;
+              };
+            }>;
+          };
+        };
+      }>(Q.PLAYLIST_TRACKS, { id: playlist_id, first: limit });
+
+      const playlist = res.data!.playlist;
+      const tracks = playlist.tracks.edges.map((e) => e.node);
+
+      if (tracks.length === 0) {
+        return text(`No tracks found in playlist "${playlist.name}".`);
+      }
+
+      const lines = tracks.map((t, i) => {
+        const artists = t.artists.map((a) => a.name).join(", ");
+        return `${i + 1}. ${t.name} - ${artists}\n   ID: ${t.id}`;
+      });
+
+      return text(
+        `${playlist.name} - ${tracks.length} track(s):\n\n${lines.join("\n\n")}`
+      );
+    }
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Category B: Schedule Management
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── create_schedule ───────────────────────────────────────────────────────
+
+  server.tool(
+    "create_schedule",
+    `Create a music schedule with time slots. Each slot assigns a playlist to specific days and times.
+
+Days options: "daily", "weekdays" (Mon-Fri), "weekends" (Sat-Sun), or specific days like "MO,WE,FR".
+Valid day codes: MO, TU, WE, TH, FR, SA, SU.
+
+After creating, use add_to_library to make it visible in the Soundtrack app, then assign_source to activate it on zones.`,
+    {
+      account_id: z
+        .string()
+        .describe("The account ID that will own this schedule"),
+      name: z.string().describe("Name for the schedule"),
+      description: z.string().optional().describe("Optional description"),
+      slots: z
+        .array(
+          z.object({
+            playlist_id: z
+              .string()
+              .describe(
+                "Playlist ID to play (get from search_music, list_playlists, or browse_categories)"
+              ),
+            days: z
+              .string()
+              .describe(
+                'When to play: "daily", "weekdays", "weekends", or specific days like "MO,WE,FR"'
+              ),
+            start_time: z
+              .string()
+              .describe('Start time in HH:MM format (24-hour), e.g. "09:00"'),
+            duration_hours: z
+              .number()
+              .positive()
+              .describe(
+                "Duration in hours (e.g. 3 for 3 hours, 1.5 for 90 minutes)"
+              ),
+          })
+        )
+        .min(1)
+        .describe("Time slots defining when each playlist plays"),
+    },
+    async ({ account_id, name, description, slots }) => {
+      const convertedSlots = convertSlots(slots);
+
+      const input: Record<string, unknown> = {
+        ownerId: account_id,
+        name,
+        presentAs: "daily",
+        slots: convertedSlots,
+      };
+      if (description) input.description = description;
+
+      const res = await graphql<{
+        createSchedule: { id: string; name: string; slots: Array<{ id: string }> };
+      }>(Q.CREATE_SCHEDULE, { input });
+
+      const schedule = res.data!.createSchedule;
+
+      return text(
+        `Schedule created: "${schedule.name}"\nID: ${schedule.id}\nSlots: ${schedule.slots.length}\n\nNext steps:\n1. Use add_to_library to make it visible in the Soundtrack app\n2. Use assign_source to activate it on sound zones`
+      );
+    }
+  );
+
+  // ── update_schedule ───────────────────────────────────────────────────────
+
+  server.tool(
+    "update_schedule",
+    "Update an existing schedule. WARNING: providing slots replaces ALL existing slots (does not merge). Use get_schedule_details first to see current slots. Requires a schedule ID (get it from list_schedules).",
+    {
+      schedule_id: z.string().describe("The schedule ID to update"),
+      name: z.string().optional().describe("New name for the schedule"),
+      description: z
+        .string()
+        .optional()
+        .describe("New description for the schedule"),
+      slots: z
+        .array(
+          z.object({
+            playlist_id: z.string().describe("Playlist ID to play"),
+            days: z
+              .string()
+              .describe(
+                'When to play: "daily", "weekdays", "weekends", or specific days like "MO,WE,FR"'
+              ),
+            start_time: z
+              .string()
+              .describe('Start time in HH:MM format (24-hour), e.g. "09:00"'),
+            duration_hours: z
+              .number()
+              .positive()
+              .describe("Duration in hours"),
+          })
+        )
+        .optional()
+        .describe(
+          "New time slots (REPLACES all existing slots). Omit to only update name/description."
+        ),
+    },
+    async ({ schedule_id, name, description, slots }) => {
+      const input: Record<string, unknown> = { id: schedule_id };
+      if (name) input.name = name;
+      if (description) input.description = description;
+      if (slots) input.slots = convertSlots(slots);
+
+      const res = await graphql<{
+        updateSchedule: { id: string; name: string; slots: Array<{ id: string }> };
+      }>(Q.UPDATE_SCHEDULE, { input });
+
+      const schedule = res.data!.updateSchedule;
+
+      return text(
+        `Schedule updated: "${schedule.name}"\nID: ${schedule.id}\nSlots: ${schedule.slots.length}`
+      );
+    }
+  );
+
+  // ── get_schedule_details ──────────────────────────────────────────────────
+
+  server.tool(
+    "get_schedule_details",
+    "See the time slots and playlists inside a schedule. Requires a schedule ID (get it from list_schedules).",
+    {
+      schedule_id: z.string().describe("The schedule ID to get details for"),
+    },
+    async ({ schedule_id }) => {
+      const res = await graphql<{
+        schedule: {
+          id: string;
+          name: string;
+          description?: string;
+          presentAs?: string;
+          slots?: Array<{
+            id: string;
+            rrule?: string;
+            start?: string;
+            duration?: number;
+            playlistIds?: string[];
+          }>;
+        };
+      }>(Q.SCHEDULE_DETAILS, { id: schedule_id });
+
+      const schedule = res.data!.schedule;
+      const parts: string[] = [
+        `Schedule: "${schedule.name}"`,
+        `ID: ${schedule.id}`,
+      ];
+
+      if (schedule.description) {
+        parts.push(`Description: ${schedule.description}`);
+      }
+
+      if (schedule.slots && schedule.slots.length > 0) {
+        parts.push(`\nSlots (${schedule.slots.length}):`);
+        for (const slot of schedule.slots) {
+          const playlists = slot.playlistIds?.join(", ") || "none";
+          const rrule = slot.rrule || "No recurrence";
+          const start = slot.start
+            ? `${slot.start.slice(0, 2)}:${slot.start.slice(2, 4)}`
+            : "?";
+          const hours = slot.duration
+            ? `${(slot.duration / 3600000).toFixed(1)}h`
+            : "?";
+          parts.push(`  - ${rrule} | ${start} for ${hours} | playlists: ${playlists}`);
+        }
+      }
+
+      return text(parts.join("\n"));
+    }
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Category C: Zone Assignment
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── assign_source ─────────────────────────────────────────────────────────
+
+  server.tool(
+    "assign_source",
+    "Assign a schedule or playlist to one or more sound zones. This is the action that makes music actually play. Requires zone IDs (from list_sound_zones) and a source ID (from list_playlists, list_schedules, search_music, or create_schedule).",
+    {
+      sound_zone_ids: z
+        .array(z.string())
+        .min(1)
+        .describe("One or more sound zone IDs to assign the source to"),
+      source_id: z
+        .string()
+        .describe("The schedule or playlist ID to assign as the music source"),
+    },
+    async ({ sound_zone_ids, source_id }) => {
+      const res = await graphql<{
+        soundZoneAssignSource: {
+          soundZones: string[];
+          source?: { id: string; name: string };
+        };
+      }>(Q.ASSIGN_SOURCE, {
+        input: { soundZones: sound_zone_ids, source: source_id },
+      });
+
+      const result = res.data!.soundZoneAssignSource;
+      const sourceName = result.source?.name || source_id;
+
+      return text(
+        `Source assigned to ${sound_zone_ids.length} zone(s).\nSource: "${sourceName}"`
+      );
+    }
+  );
+
+  // ── get_zone_source ───────────────────────────────────────────────────────
+
+  server.tool(
+    "get_zone_source",
+    "See what schedule or playlist is currently assigned to a sound zone. This shows the music source, not the current track (use get_now_playing for that). Requires a sound zone ID.",
+    {
+      sound_zone_id: z
+        .string()
+        .describe("The sound zone ID to check the music source for"),
+    },
+    async ({ sound_zone_id }) => {
+      const res = await graphql<{
+        soundZone: {
+          id: string;
+          name: string;
+          playFrom?: { id: string; name: string; __typename?: string } | null;
+        };
+      }>(Q.ZONE_SOURCE, { id: sound_zone_id });
+
+      const zone = res.data!.soundZone;
+
+      if (!zone.playFrom) {
+        return text(`Zone "${zone.name}" has no music source assigned.`);
+      }
+
+      const sourceType = zone.playFrom.__typename || "Source";
+
+      return text(
+        `Zone "${zone.name}" is playing from:\n${sourceType}: "${zone.playFrom.name}"\nID: ${zone.playFrom.id}`
+      );
+    }
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Category D: Content Management
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── create_playlist ───────────────────────────────────────────────────────
+
+  server.tool(
+    "create_playlist",
+    "Create a custom manual playlist, optionally with tracks. Requires an account ID. Use search_music with type 'track' to find track IDs.",
+    {
+      account_id: z
+        .string()
+        .describe("The account ID that will own this playlist"),
+      name: z.string().describe("Name for the playlist"),
+      description: z.string().optional().describe("Optional description"),
+      track_ids: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Optional track IDs to add (get from search_music with type 'track')"
+        ),
+    },
+    async ({ account_id, name, description, track_ids }) => {
+      const input: Record<string, unknown> = { ownerId: account_id, name };
+      if (description) input.description = description;
+      if (track_ids && track_ids.length > 0) input.trackIds = track_ids;
+
+      const res = await graphql<{
+        createManualPlaylist: { id: string; name: string };
+      }>(Q.CREATE_MANUAL_PLAYLIST, { input });
+
+      const playlist = res.data!.createManualPlaylist;
+
+      return text(
+        `Playlist created: "${playlist.name}"\nID: ${playlist.id}${
+          track_ids ? `\nTracks: ${track_ids.length}` : ""
+        }`
+      );
+    }
+  );
+
+  // ── queue_tracks ──────────────────────────────────────────────────────────
+
+  server.tool(
+    "queue_tracks",
+    "Queue specific tracks to play next in a sound zone. Use search_music with type 'track' to find track IDs. Requires a sound zone ID.",
+    {
+      sound_zone_id: z
+        .string()
+        .describe("The sound zone ID to queue tracks in"),
+      track_ids: z
+        .array(z.string())
+        .min(1)
+        .describe(
+          "Track IDs to queue (get from search_music with type 'track')"
+        ),
+      play_next: z
+        .boolean()
+        .default(true)
+        .describe("If true, queued tracks play immediately after current track"),
+    },
+    async ({ sound_zone_id, track_ids, play_next }) => {
+      await graphql(Q.QUEUE_TRACKS, {
+        input: {
+          soundZone: sound_zone_id,
+          tracks: track_ids,
+          immediate: play_next,
+        },
+      });
+
+      return text(
+        `${track_ids.length} track(s) queued in zone.${
+          play_next ? " Will play next." : ""
+        }`
+      );
+    }
+  );
+
+  // ── block_track ───────────────────────────────────────────────────────────
+
+  server.tool(
+    "block_track",
+    "Block a track from playing in a sound zone. The track will be skipped whenever it comes up. Requires a sound zone ID and track ID (get track ID from get_now_playing or search_music).",
+    {
+      sound_zone_id: z
+        .string()
+        .describe("The sound zone ID to block the track in"),
+      track_id: z.string().describe("The track ID to block"),
+    },
+    async ({ sound_zone_id, track_id }) => {
+      await graphql(Q.BLOCK_TRACK, {
+        input: {
+          parent: sound_zone_id,
+          source: track_id,
+          reasons: ["blocked_by_user"],
+        },
+      });
+
+      return text("Track blocked. It will be skipped in this zone.");
+    }
+  );
+
+  // ── add_to_library ────────────────────────────────────────────────────────
+
+  server.tool(
+    "add_to_library",
+    "Add a schedule or playlist to an account's music library. This makes it visible in the Soundtrack app. Recommended after create_schedule.",
+    {
+      account_id: z.string().describe("The account ID"),
+      source_id: z
+        .string()
+        .describe("The schedule or playlist ID to add to the library"),
+    },
+    async ({ account_id, source_id }) => {
+      try {
+        await graphql(Q.ADD_TO_MUSIC_LIBRARY, {
+          input: { parent: account_id, source: source_id },
+        });
+        return text("Added to music library.");
+      } catch (err) {
+        return text(
+          `Note: Could not add to music library (${err instanceof Error ? err.message : "unknown error"}). The schedule/playlist still works — it just may not appear in the Soundtrack app.`
+        );
+      }
+    }
+  );
+
+  // ── remove_from_library ───────────────────────────────────────────────────
+
+  server.tool(
+    "remove_from_library",
+    "Remove a schedule or playlist from an account's music library.",
+    {
+      account_id: z.string().describe("The account ID"),
+      source_id: z
+        .string()
+        .describe("The schedule or playlist ID to remove from the library"),
+    },
+    async ({ account_id, source_id }) => {
+      await graphql(Q.REMOVE_FROM_MUSIC_LIBRARY, {
+        input: { parent: account_id, source: source_id },
+      });
+
+      return text("Removed from music library.");
+    }
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Category E: AI Features
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── generate_playlist ─────────────────────────────────────────────────────
+
+  server.tool(
+    "generate_playlist",
+    "Generate a playlist from a text description using Soundtrack's AI. Describe the mood, genre, venue type, or occasion and get matching playlists. Example: 'relaxing jazz for a hotel lobby' or 'upbeat Friday night bar music'.",
+    {
+      prompt: z
+        .string()
+        .describe(
+          "Describe the music you want (mood, genre, venue, occasion)"
+        ),
+      market: z
+        .string()
+        .optional()
+        .describe("Country code for regional preferences (e.g. 'US', 'TH')"),
+    },
+    async ({ prompt, market }) => {
+      const variables: Record<string, unknown> = { query: prompt };
+      if (market) variables.market = market;
+
+      const res = await graphql<{
+        getMusicFromPrompt: {
+          playlists: Array<{ id: string; name: string }>;
+          trackingId?: string;
+        };
+      }>(Q.GENERATE_PLAYLIST, variables);
+
+      const playlists = res.data!.getMusicFromPrompt?.playlists;
+
+      if (!playlists || playlists.length === 0) {
+        return text(
+          `No playlists generated for "${prompt}". Try a different description or use search_music instead.`
+        );
+      }
+
+      const lines = playlists.map(
+        (p, i) => `${i + 1}. ${p.name}\n   ID: ${p.id}`
+      );
+
+      return text(
+        `Generated ${playlists.length} playlist(s) for "${prompt}":\n\n${lines.join("\n\n")}`
+      );
     }
   );
 }
