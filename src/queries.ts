@@ -105,7 +105,7 @@ query SoundZoneDetails($id: ID!) {
 // ── Mutations ──────────────────────────────────────────────────────────────
 
 export const SET_VOLUME = `
-mutation SetVolume($soundZone: ID!, $volume: Int!) {
+mutation SetVolume($soundZone: ID!, $volume: Volume!) {
   setVolume(input: { soundZone: $soundZone, volume: $volume }) {
     volume
   }
