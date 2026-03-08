@@ -348,7 +348,7 @@ export function registerTools(server: McpServer, accountIds?: string[]) {
 
   server.tool(
     "set_volume",
-    "Set the volume for a sound zone. Volume is typically 0-16 depending on hardware. Requires a sound zone ID.",
+    "Set the volume for a sound zone. Scale is 0-16 (0=silent, 8=medium, 16=max). There is no way to read the current volume. If the user says 'louder' or 'quieter' without a number, ask them what level to set it to, or suggest a value. Requires a sound zone ID.",
     {
       sound_zone_id: z
         .string()
