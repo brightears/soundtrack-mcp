@@ -1089,7 +1089,7 @@ After creating, use add_to_library to make it visible in the Soundtrack app, the
         input: {
           parent: sound_zone_id,
           source: track_id,
-          reasons: ["blocked_by_user"],
+          reasons: ["dislike"],
         },
       });
 

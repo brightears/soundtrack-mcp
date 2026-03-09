@@ -716,7 +716,7 @@ router.post(
       input: {
         parent: req.params.zoneId as string,
         source: track_id,
-        reasons: ["blocked_by_user"],
+        reasons: ["dislike"],
       },
     });
 
