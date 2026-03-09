@@ -10,7 +10,7 @@ Talk to your AI assistant in natural language:
 
 - *"What's playing at the lobby right now?"*
 - *"Turn the volume down to 5 in the restaurant zone"*
-- *"Search for chill jazz playlists"*
+- *"Search for chill jazz playlists"* (includes preview links)
 - *"Create a weekly schedule: jazz mornings, lounge evenings"*
 - *"Assign that schedule to the lobby zone"*
 - *"Queue a specific track to play next"*
