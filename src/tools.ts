@@ -51,6 +51,10 @@ function text(content: string) {
   return { content: [{ type: "text" as const, text: content }] };
 }
 
+function sybUrl(id: string) {
+  return `https://app.soundtrack.io/music/${id}`;
+}
+
 // Convert simplified slot format to Soundtrack API format
 function convertSlots(
   slots: Array<{
@@ -534,7 +538,7 @@ export function registerTools(server: McpServer, accountIds?: string[]) {
       }
 
       const lines = playlists.map(
-        (p, i) => `${i + 1}. ${p.name}\n   ID: ${p.id}`
+        (p, i) => `${i + 1}. ${p.name}\n   ID: ${p.id}\n   Preview: ${sybUrl(p.id)}`
       );
 
       return text(
@@ -628,7 +632,8 @@ export function registerTools(server: McpServer, accountIds?: string[]) {
           r.artists && r.artists.length > 0
             ? ` by ${r.artists.map((a) => a.name).join(", ")}`
             : "";
-        return `${i + 1}. ${r.name}${artists}\n   ID: ${r.id}`;
+        const link = r.__typename === "Playlist" ? `\n   Preview: ${sybUrl(r.id)}` : "";
+        return `${i + 1}. ${r.name}${artists}\n   ID: ${r.id}${link}`;
       });
 
       return text(
@@ -669,7 +674,7 @@ export function registerTools(server: McpServer, accountIds?: string[]) {
         }
 
         const lines = playlists.map(
-          (p, i) => `${i + 1}. ${p.name}\n   ID: ${p.id}`
+          (p, i) => `${i + 1}. ${p.name}\n   ID: ${p.id}\n   Preview: ${sybUrl(p.id)}`
         );
 
         return text(
@@ -743,7 +748,7 @@ export function registerTools(server: McpServer, accountIds?: string[]) {
       });
 
       return text(
-        `${playlist.name} - ${tracks.length} track(s):\n\n${lines.join("\n\n")}`
+        `${playlist.name} (${sybUrl(playlist_id)}) - ${tracks.length} track(s):\n\n${lines.join("\n\n")}`
       );
     }
   );
@@ -989,8 +994,9 @@ After creating, use add_to_library to make it visible in the Soundtrack app, the
 
       const sourceType = zone.playFrom.__typename || "Source";
 
+      const link = sourceType === "Playlist" ? `\nPreview: ${sybUrl(zone.playFrom.id)}` : "";
       return text(
-        `Zone "${zone.name}" is playing from:\n${sourceType}: "${zone.playFrom.name}"\nID: ${zone.playFrom.id}`
+        `Zone "${zone.name}" is playing from:\n${sourceType}: "${zone.playFrom.name}"\nID: ${zone.playFrom.id}${link}`
       );
     }
   );
