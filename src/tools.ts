@@ -761,10 +761,12 @@ export function registerTools(server: McpServer, accountIds?: string[]) {
 
   server.tool(
     "create_schedule",
-    `Create a music schedule with time slots. Each slot assigns a playlist to specific days and times.
+    `Create a music schedule with recurring weekly time slots. Each slot assigns a playlist to specific days and times.
 
 Days options: "daily", "weekdays" (Mon-Fri), "weekends" (Sat-Sun), or specific days like "MO,WE,FR".
 Valid day codes: MO, TU, WE, TH, FR, SA, SU.
+
+LIMITATION: Schedules are recurring weekly only — they cannot be set to start/end on specific dates (e.g. "Dec 1-26" or one-time events). For date-bounded or event-based scheduling, bmasia clients can use the Music Brief tool at https://bmasia-music-brief-v2.onrender.com/ — others can contact bmasia at https://bmasiamusic.com for assistance.
 
 After creating, use add_to_library to make it visible in the Soundtrack app, then assign_source to activate it on zones.`,
     {
