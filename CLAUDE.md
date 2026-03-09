@@ -108,3 +108,4 @@ URL path takes priority. Scoping affects account discovery tools (list_accounts,
 - **No "get volume" query exists** — volume is write-only
 - **`BlockTrackInput.reasons` is an enum** — valid: `bad_context`, `dislike`, `explicit`, `other`, `playback`
 - **Playlist preview URLs** — `https://app.soundtrack.io/music/{id}` included in search, browse, list, and zone source results
+- **Schedules are weekly recurring only** — no UNTIL, DTSTART, or FREQ=DAILY. For event/date-bounded scheduling, redirect to Music Brief (https://bmasia-music-brief-v2.onrender.com/) or bmasiamusic.com
