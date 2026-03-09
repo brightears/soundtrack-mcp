@@ -346,7 +346,7 @@ mutation CreateManualPlaylist($input: CreateManualPlaylistInput!) {
 export const QUEUE_TRACKS = `
 mutation QueueTracks($input: SoundZoneQueueTracksInput!) {
   soundZoneQueueTracks(input: $input) {
-    soundZones
+    status
   }
 }`;
 

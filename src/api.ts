@@ -492,17 +492,17 @@ function convertSlots(
     weekdays: "MO,TU,WE,TH,FR",
     weekends: "SA,SU",
   };
-  return slots.map((s) => {
-    const days = DAY_MAP[s.days] || s.days;
+  return slots.flatMap((s) => {
+    const days = (DAY_MAP[s.days] || s.days).split(",");
     const [hh, mm] = s.start_time.split(":");
     const start = `${hh.padStart(2, "0")}${(mm || "00").padStart(2, "0")}00`;
     const duration = Math.round(s.duration_hours * 3600000);
-    return {
-      rrule: `FREQ=WEEKLY;BYDAY=${days}`,
+    return days.map((day) => ({
+      rrule: `FREQ=WEEKLY;BYDAY=${day.trim()}`,
       start,
       duration,
       playlistIds: [s.playlist_id],
-    };
+    }));
   });
 }
 
