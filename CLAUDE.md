@@ -71,7 +71,7 @@ MCP server connecting Soundtrack Your Brand's GraphQL API to Claude and ChatGPT.
 25. `remove_from_library` - Remove from music library
 
 ### AI Features (1)
-26. `generate_playlist` - AI-generated playlist from text description
+26. `generate_playlist` - AI-generated playlist from text description (non-functional: requires user session, not API token)
 
 ## Customer Scoping
 Two methods:
@@ -101,3 +101,9 @@ URL path takes priority. Scoping affects account discovery tools (list_accounts,
 - `me` query uses `...on PublicAPIClient` fragment for API token auth
 - API tokens get revoked if exposed publicly
 - Express 5 types: `req.params` values are `string | string[]` — cast with `as string`
+- **`trust proxy` required on Render** — MCP SDK's rate limiter throws `ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` without it
+- **Render deploys kill MCP sessions** — users must start a new chat after each deploy
+- **Schedule BYDAY accepts only one day per rrule** — `convertSlots()` expands multi-day into separate slots
+- **`setVolume` uses `Volume!` scalar** — not `Int!`
+- **No "get volume" query exists** — volume is write-only
+- **`BlockTrackInput.reasons` is an enum** — valid: `bad_context`, `dislike`, `explicit`, `other`, `playback`
