@@ -188,6 +188,25 @@ When `OPERATOR_TOKEN` is unset (self-hosted / single-user installs), every endpo
 
 For multi-tenant deploys (e.g. BMAsia hosting clients), set `OPERATOR_TOKEN` on the server, hand out `/c/<ids>/mcp` URLs to clients, and keep the operator URL + token internal.
 
+### Scope aliases
+
+Customers with many accounts (e.g. a hotel chain with 250+ properties) would otherwise need a 7+ KB URL with every account ID. Define short aliases via the `SCOPE_ALIASES` env var (JSON map) so they get a clean URL like `/c/tui/mcp`:
+
+```bash
+# On the server (e.g. Render env vars)
+SCOPE_ALIASES='{"tui":"id1,id2,id3,...","other-chain":"id4,id5"}'
+```
+
+Then customers connect via:
+
+```
+https://your-server/c/tui/mcp
+```
+
+The alias resolves to the full account ID list server-side. If the path segment isn't a known alias, it falls back to treating the segment as a raw comma-separated list (backwards-compatible).
+
+GET `/scope-aliases` returns the names + per-alias account count for ops debugging (no IDs exposed).
+
 ## Available Tools (41)
 
 ### Discovery

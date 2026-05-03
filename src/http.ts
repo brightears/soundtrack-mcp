@@ -23,6 +23,40 @@ function isOperatorRequest(req: Request): boolean {
   return !!provided && provided === OPERATOR_TOKEN;
 }
 
+// Scope aliases — JSON env var mapping short names to comma-separated account IDs.
+// Lets customers connect via /c/tui/mcp instead of a 7KB URL with 262 raw IDs.
+// Format: SCOPE_ALIASES='{"tui":"id1,id2,id3","other":"id4,id5"}'
+const SCOPE_ALIASES: Record<string, string[]> = (() => {
+  const raw = process.env.SCOPE_ALIASES || "";
+  if (!raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const out: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      out[k.toLowerCase()] = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    return out;
+  } catch (e) {
+    console.error("SCOPE_ALIASES parse error:", e);
+    return {};
+  }
+})();
+
+function resolveScopeSegment(segment: string): string[] {
+  // If the segment matches an alias key, expand. Otherwise treat as raw CSV of IDs.
+  const key = segment.toLowerCase();
+  if (SCOPE_ALIASES[key]) {
+    return SCOPE_ALIASES[key];
+  }
+  return segment
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
@@ -497,23 +531,32 @@ app.get("/health", (_req, res) => {
 
 // ── Client-Scoped Routes (/c/:accountIds/*) ───────────────────────────────
 
-// Middleware: extract account IDs from path and set on res.locals
-function scopeMiddleware(req: Request, res: Response, next: NextFunction) {
+// Middleware: alias-aware account ID resolution for the REST API
+function aliasScopeMiddleware(req: Request, res: Response, next: NextFunction) {
   const raw = req.params.accountIds as string;
   if (raw) {
-    res.locals.scopedAccountIds = parseAccountIds(raw);
+    res.locals.scopedAccountIds = resolveScopeSegment(raw);
   }
   next();
 }
 
-// Scoped REST API
-app.use("/c/:accountIds/api", scopeMiddleware, apiRouter);
+// Scoped REST API (alias-aware)
+app.use("/c/:accountIds/api", aliasScopeMiddleware, apiRouter);
 
-// Scoped OpenAPI spec
+// Scoped OpenAPI spec (alias-aware)
 app.get("/c/:accountIds/openapi.json", (req, res) => {
   const host = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
   const baseUrl = `${host}/c/${req.params.accountIds as string}`;
   res.json(buildOpenApiSpec(baseUrl));
+});
+
+// List configured scope aliases (helpful for ops debugging — no secrets exposed)
+app.get("/scope-aliases", (_req, res) => {
+  res.json({
+    aliases: Object.fromEntries(
+      Object.entries(SCOPE_ALIASES).map(([k, v]) => [k, v.length])
+    ),
+  });
 });
 
 // ── Unscoped REST API (for internal / self-hosted use) ────────────────────
@@ -596,9 +639,12 @@ async function handleMcpSession(req: Request, res: Response) {
   res.status(400).json({ error: "No valid session. Send a POST first." });
 }
 
-// Scoped MCP routes (with OAuth) — client role, scoped to URL accountIds
+// Scoped MCP routes (with OAuth) — client role, scoped to URL accountIds.
+// The path segment can be either:
+//   - A comma-separated list of raw account IDs:  /c/id1,id2,id3/mcp
+//   - A scope alias defined in SCOPE_ALIASES:     /c/tui/mcp
 app.post("/c/:accountIds/mcp", optionalBearerAuth, (req, res) => {
-  const accountIds = parseAccountIds(req.params.accountIds as string);
+  const accountIds = resolveScopeSegment(req.params.accountIds as string);
   handleMcpPost(req, res, accountIds, "client");
 });
 app.get("/c/:accountIds/mcp", optionalBearerAuth, handleMcpSession);
