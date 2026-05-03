@@ -9,7 +9,8 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-registerTools(server);
+// stdio = self-hosted single-user, default to operator role for full toolset
+registerTools(server, undefined, "operator");
 
 async function main() {
   const transport = new StdioServerTransport();

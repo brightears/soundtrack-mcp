@@ -169,11 +169,66 @@ async function searchAccountByName(
   return matches;
 }
 
+// ── Scope check helpers ────────────────────────────────────────────────────
+
+export type Role = "operator" | "client";
+
+async function assertAccountScope(
+  scopedIds: string[] | null,
+  accountId: string
+): Promise<void> {
+  if (!scopedIds) return;
+  if (!scopedIds.includes(accountId)) {
+    throw new Error(
+      `Access denied: account ${accountId} is outside this connection's scope.`
+    );
+  }
+}
+
+async function assertLocationScope(
+  scopedIds: string[] | null,
+  locationId: string
+): Promise<void> {
+  if (!scopedIds) return;
+  const res = await graphql<{ location?: { account?: { id: string } } }>(
+    Q.LOCATION_ACCOUNT_LOOKUP,
+    { id: locationId }
+  );
+  const acctId = res.data?.location?.account?.id;
+  if (!acctId || !scopedIds.includes(acctId)) {
+    throw new Error(
+      `Access denied: location ${locationId} is outside this connection's scope.`
+    );
+  }
+}
+
+async function assertZoneScope(
+  scopedIds: string[] | null,
+  zoneId: string
+): Promise<void> {
+  if (!scopedIds) return;
+  const res = await graphql<{ soundZone?: { account?: { id: string } } }>(
+    Q.SOUND_ZONE_ACCOUNT_LOOKUP,
+    { id: zoneId }
+  );
+  const acctId = res.data?.soundZone?.account?.id;
+  if (!acctId || !scopedIds.includes(acctId)) {
+    throw new Error(
+      `Access denied: sound zone ${zoneId} is outside this connection's scope.`
+    );
+  }
+}
+
 // ── Register All Tools ─────────────────────────────────────────────────────
 
-export function registerTools(server: McpServer, accountIds?: string[]) {
+export function registerTools(
+  server: McpServer,
+  accountIds?: string[],
+  role: Role = "client"
+) {
   const scopedIds = accountIds ?? getScopedAccountIds();
   const isScoped = scopedIds !== null;
+  const isOperator = role === "operator";
 
   // ── list_accounts ──────────────────────────────────────────────────────
 
@@ -1195,6 +1250,473 @@ After creating, use add_to_library to make it visible in the Soundtrack app, the
 
       return text(
         `Generated ${playlists.length} playlist(s) for "${prompt}":\n\n${lines.join("\n\n")}`
+      );
+    }
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Category F: Admin — Account / Location / Zone / Subscription Lifecycle
+  //
+  // Scope rules:
+  //   - operator role: full access to every account on the server's API token
+  //   - client role:   limited to the accounts in scopedIds (URL or env)
+  //
+  // Cost-impacting tools (subscription_activate, subscription_cancel,
+  // account_register) are operator-only — clients can't trigger billing or
+  // create new accounts that bypass scope checks.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── account_register (operator only) ──────────────────────────────────────
+
+  if (isOperator) {
+    server.tool(
+      "account_register",
+      "Create a new Soundtrack account. Operator-only — requires owner user_id, plan, country, and physical address. Returns the new account ID.",
+      {
+        business_name: z.string().describe("Customer-facing business name"),
+        business_type: z
+          .string()
+          .default("hotel")
+          .describe("hotel | restaurant | retail | gym | spa (lowercase)"),
+        country: z
+          .string()
+          .describe("ISO-2 country code (e.g. ES, TH, IN, US)"),
+        plan: z
+          .enum(["ESSENTIAL", "UNLIMITED", "STARTER", "ROYALTY_FREE", "SOUNDTRACK"])
+          .describe("Subscription plan tier"),
+        billing_cycle: z
+          .enum(["MONTHLY", "QUARTERLY", "YEARLY", "NOT_SET"])
+          .default("YEARLY"),
+        owner_user_id: z
+          .string()
+          .describe(
+            "User ID that will own the account. PublicAPIClient tokens cannot own accounts directly."
+          ),
+        address_line_1: z.string(),
+        address_line_2: z.string().optional(),
+        city: z.string(),
+        postal_code: z.string(),
+      },
+      async (args) => {
+        const physicalAddress: Record<string, string> = {
+          addressLine1: args.address_line_1,
+          city: args.city,
+          postalCode: args.postal_code,
+          country: args.country,
+        };
+        if (args.address_line_2) physicalAddress.addressLine2 = args.address_line_2;
+
+        const input = {
+          businessName: args.business_name,
+          businessType: args.business_type,
+          country: args.country,
+          plan: args.plan,
+          billingCycle: args.billing_cycle,
+          userId: args.owner_user_id,
+          acceptLegalTerms: true,
+          physicalAddress,
+        };
+
+        const res = await graphql<{
+          accountRegister: {
+            account: { id: string; businessName: string; plan: string; country: string };
+          };
+        }>(Q.ACCOUNT_REGISTER, { input });
+
+        const a = res.data!.accountRegister.account;
+        return text(
+          `Account created: ${a.businessName}\n  ID: ${a.id}\n  Plan: ${a.plan}\n  Country: ${a.country}`
+        );
+      }
+    );
+  }
+
+  // ── account_add_user ──────────────────────────────────────────────────────
+
+  server.tool(
+    "account_add_user",
+    "Add a user (by email) as an admin/contact on an account. Common after account_register.",
+    {
+      account_id: z.string().describe("The account ID"),
+      email: z.string().describe("User email"),
+      role: z
+        .enum(["ADMIN", "OWNER", "USER", "FINANCE", "CONTACT"])
+        .default("ADMIN"),
+      contact: z
+        .boolean()
+        .default(false)
+        .describe("If true, also marks user as a primary contact"),
+    },
+    async ({ account_id, email, role: userRole, contact }) => {
+      await assertAccountScope(scopedIds, account_id);
+      await graphql(Q.ACCOUNT_ADD_USER, {
+        input: { accountId: account_id, email, role: userRole, contact },
+      });
+      return text(`Added ${email} (${userRole}) to ${account_id}.`);
+    }
+  );
+
+  // ── location_create ───────────────────────────────────────────────────────
+
+  server.tool(
+    "location_create",
+    "Create a location under an account. Optionally seeds a first sound zone via sound_zone_name. physical_address requires postalCode — without it, SYB returns a generic Validation failed.",
+    {
+      account_id: z.string(),
+      name: z.string().describe("Location display name"),
+      sound_zone_name: z
+        .string()
+        .optional()
+        .describe("If set, also creates a first sound zone with this name"),
+      address_line_1: z.string(),
+      address_line_2: z.string().optional(),
+      city: z.string(),
+      postal_code: z.string(),
+      country: z.string().describe("ISO-2"),
+    },
+    async (args) => {
+      await assertAccountScope(scopedIds, args.account_id);
+      const physicalAddress: Record<string, string> = {
+        addressLine1: args.address_line_1,
+        city: args.city,
+        postalCode: args.postal_code,
+        country: args.country,
+      };
+      if (args.address_line_2) physicalAddress.addressLine2 = args.address_line_2;
+
+      const input: Record<string, unknown> = {
+        account: args.account_id,
+        name: args.name,
+        physicalAddress,
+      };
+      if (args.sound_zone_name) input.soundZoneName = args.sound_zone_name;
+
+      const res = await graphql<{
+        locationCreate: {
+          location: {
+            id: string;
+            name: string;
+            soundZones: { edges: Array<{ node: { id: string; name: string } }> };
+          };
+        };
+      }>(Q.LOCATION_CREATE, { input });
+
+      const loc = res.data!.locationCreate.location;
+      const zones = extractNodes(loc.soundZones);
+      const zonesLine = zones.length
+        ? `\n  Zones created: ${zones.map((z) => `${z.name} (${z.id})`).join(", ")}`
+        : "";
+      return text(`Location created: ${loc.name}\n  ID: ${loc.id}${zonesLine}`);
+    }
+  );
+
+  // ── location_update ───────────────────────────────────────────────────────
+
+  server.tool(
+    "location_update",
+    "Rename a location. To change address, set additional fields.",
+    {
+      location_id: z.string(),
+      name: z.string().optional(),
+    },
+    async ({ location_id, name }) => {
+      await assertLocationScope(scopedIds, location_id);
+      const input: Record<string, unknown> = { id: location_id };
+      if (name) input.name = name;
+      const res = await graphql<{
+        locationUpdate: { location: { id: string; name: string } };
+      }>(Q.LOCATION_UPDATE, { input });
+      const l = res.data!.locationUpdate.location;
+      return text(`Location updated: ${l.name} (${l.id})`);
+    }
+  );
+
+  // ── location_delete ───────────────────────────────────────────────────────
+
+  server.tool(
+    "location_delete",
+    "Delete a location. Will fail if it still has active sound zones — delete or move zones first.",
+    {
+      location_id: z.string(),
+    },
+    async ({ location_id }) => {
+      await assertLocationScope(scopedIds, location_id);
+      const res = await graphql<{
+        locationDelete: { location: { id: string; name: string } };
+      }>(Q.LOCATION_DELETE, { input: { id: location_id } });
+      const l = res.data!.locationDelete.location;
+      return text(`Location deleted: ${l.name} (${l.id})`);
+    }
+  );
+
+  // ── sound_zone_create ─────────────────────────────────────────────────────
+
+  server.tool(
+    "sound_zone_create",
+    "Create a new sound zone under a location. Zone is inert (no subscription) until subscription_activate runs — operator action.",
+    {
+      location_id: z.string(),
+      name: z.string(),
+    },
+    async ({ location_id, name }) => {
+      await assertLocationScope(scopedIds, location_id);
+      const res = await graphql<{
+        soundZoneCreate: { soundZone: { id: string; name: string } };
+      }>(Q.SOUND_ZONE_CREATE, { input: { location: location_id, name } });
+      const z = res.data!.soundZoneCreate.soundZone;
+      return text(`Sound zone created: ${z.name} (${z.id})`);
+    }
+  );
+
+  // ── sound_zone_update_name ────────────────────────────────────────────────
+
+  server.tool(
+    "sound_zone_update_name",
+    "Rename a sound zone. Useful when SYB names need to mirror an external source-of-truth (e.g. a customer's zone naming).",
+    {
+      sound_zone_id: z.string(),
+      name: z.string(),
+    },
+    async ({ sound_zone_id, name }) => {
+      await assertZoneScope(scopedIds, sound_zone_id);
+      const res = await graphql<{
+        soundZoneUpdate: { soundZone: { id: string; name: string } };
+      }>(Q.SOUND_ZONE_UPDATE, { input: { id: sound_zone_id, name } });
+      const z = res.data!.soundZoneUpdate.soundZone;
+      return text(`Renamed to: ${z.name} (${z.id})`);
+    }
+  );
+
+  // ── sound_zone_delete ─────────────────────────────────────────────────────
+
+  server.tool(
+    "sound_zone_delete",
+    "Delete a sound zone. Safe when the zone has no active subscription. If sub is active, cancel it first or it will continue to bill till month end.",
+    {
+      sound_zone_id: z.string(),
+    },
+    async ({ sound_zone_id }) => {
+      await assertZoneScope(scopedIds, sound_zone_id);
+      const res = await graphql<{
+        soundZoneDelete: { soundZone: { id: string; name: string } };
+      }>(Q.SOUND_ZONE_DELETE, { input: { id: sound_zone_id } });
+      const z = res.data!.soundZoneDelete.soundZone;
+      return text(`Sound zone deleted: ${z.name} (${z.id})`);
+    }
+  );
+
+  // ── sound_zone_initiate_pairing ───────────────────────────────────────────
+
+  server.tool(
+    "sound_zone_initiate_pairing",
+    "Generate a pairing code for an unpaired sound zone. Customer enters this code on the Soundtrack player. Already-paired zones return an empty code — unpair first if a fresh code is needed.",
+    {
+      sound_zone_id: z.string(),
+    },
+    async ({ sound_zone_id }) => {
+      await assertZoneScope(scopedIds, sound_zone_id);
+      const res = await graphql<{
+        soundZoneInitiatePairing: { device: { pairingCode: string } };
+      }>(Q.SOUND_ZONE_INITIATE_PAIRING, {
+        input: { soundZone: sound_zone_id },
+      });
+      const code = res.data!.soundZoneInitiatePairing.device?.pairingCode || "";
+      if (!code) {
+        return text(
+          "No pairing code returned — zone may already be paired. Run sound_zone_unpair first to free the device, then re-initiate."
+        );
+      }
+      return text(`Pairing code: ${code}`);
+    }
+  );
+
+  // ── sound_zone_unpair ─────────────────────────────────────────────────────
+
+  server.tool(
+    "sound_zone_unpair",
+    "Unpair a sound zone from its current device. The customer's existing device stops playing until they re-pair. Use this only when switching devices or when a customer explicitly asks for a fresh pairing code.",
+    {
+      sound_zone_id: z.string(),
+    },
+    async ({ sound_zone_id }) => {
+      await assertZoneScope(scopedIds, sound_zone_id);
+      const res = await graphql<{
+        soundZoneUnpair: { soundZone: { id: string; name: string; isPaired: boolean } };
+      }>(Q.SOUND_ZONE_UNPAIR, { input: { soundZone: sound_zone_id } });
+      const z = res.data!.soundZoneUnpair.soundZone;
+      return text(
+        `Unpaired: ${z.name} (${z.id})  isPaired=${z.isPaired}`
+      );
+    }
+  );
+
+  // ── subscription_activate (operator only — triggers billing) ──────────────
+
+  if (isOperator) {
+    server.tool(
+      "subscription_activate",
+      "Activate the subscription on a sound zone. OPERATOR-ONLY because this triggers SYB billing for at least one month and cannot be undone within the billing period. Verify via account_billing_status afterward — soundZone.subscription field can return STALE values, use account.billing.subscription.activeStreamingSubscriptions count instead.",
+      {
+        sound_zone_id: z.string(),
+      },
+      async ({ sound_zone_id }) => {
+        const res = await graphql<{
+          subscriptionActivate: {
+            soundZone: {
+              id: string;
+              name: string;
+              account: { id: string; businessName: string; plan: string };
+            };
+          };
+        }>(Q.SUBSCRIPTION_ACTIVATE, { input: { soundZoneId: sound_zone_id } });
+        const z = res.data!.subscriptionActivate.soundZone;
+        return text(
+          `Subscription activate fired on: ${z.name} (${z.id})\n  Account: ${z.account.businessName} (${z.account.plan})\n\nVerify with account_billing_status — zone-level subscription field can be stale immediately after activation.`
+        );
+      }
+    );
+  }
+
+  // ── subscription_cancel ───────────────────────────────────────────────────
+
+  server.tool(
+    "subscription_cancel",
+    "Cancel the subscription on a sound zone. The zone continues to play until end of the current billing period, then goes silent. Reactivation re-bills.",
+    {
+      sound_zone_id: z.string(),
+    },
+    async ({ sound_zone_id }) => {
+      await assertZoneScope(scopedIds, sound_zone_id);
+      const res = await graphql<{
+        subscriptionCancel: { soundZone: { id: string; name: string } };
+      }>(Q.SUBSCRIPTION_CANCEL, { input: { soundZoneId: sound_zone_id } });
+      const z = res.data!.subscriptionCancel.soundZone;
+      return text(`Subscription cancelled: ${z.name} (${z.id})`);
+    }
+  );
+
+  // ── account_billing_status ────────────────────────────────────────────────
+
+  server.tool(
+    "account_billing_status",
+    "Read account-level subscription state — the authoritative source for whether activations took effect. activeStreamingSubscriptions count should equal the number of active zones on the account.",
+    {
+      account_id: z.string(),
+    },
+    async ({ account_id }) => {
+      await assertAccountScope(scopedIds, account_id);
+      const res = await graphql<{
+        account: {
+          id: string;
+          businessName: string;
+          plan: string;
+          country: string;
+          soundZoneStatuses: Array<{ status: string; total: number }>;
+          billing: {
+            subscription: {
+              activeFrom: string;
+              activeTo: string;
+              billingCycle: string;
+              activeStreamingSubscriptions: number;
+              checkoutState: string;
+            };
+          };
+        };
+      }>(Q.ACCOUNT_BILLING_STATUS, { id: account_id });
+      const a = res.data!.account;
+      const sub = a.billing.subscription;
+      const statusLines = a.soundZoneStatuses
+        .map((s) => `${s.status}=${s.total}`)
+        .join(" | ");
+      return text(
+        [
+          `${a.businessName} (${a.plan}, ${a.country})`,
+          `  active from: ${sub.activeFrom}`,
+          `  active to:   ${sub.activeTo}`,
+          `  billing cycle: ${sub.billingCycle}`,
+          `  active streaming subs: ${sub.activeStreamingSubscriptions}`,
+          `  checkout state: ${sub.checkoutState}`,
+          `  zones by status: ${statusLines}`,
+        ].join("\n")
+      );
+    }
+  );
+
+  // ── sound_zone_full_state ─────────────────────────────────────────────────
+
+  server.tool(
+    "sound_zone_full_state",
+    "Full state for a single zone: pairing, online, subscription, current source. Use this BEFORE any 'please revert music' work to check whether the zone is actually playing the schedule the customer thinks it is.",
+    {
+      sound_zone_id: z.string(),
+    },
+    async ({ sound_zone_id }) => {
+      await assertZoneScope(scopedIds, sound_zone_id);
+      const res = await graphql<{
+        soundZone: {
+          id: string;
+          name: string;
+          isPaired: boolean;
+          online: boolean;
+          subscription?: { state: string; isActive: boolean; activeUntil: string };
+          playFrom?: { __typename: string; id?: string; name?: string };
+        };
+      }>(Q.SOUND_ZONE_FULL_STATE, { id: sound_zone_id });
+      const z = res.data!.soundZone;
+      const sub = z.subscription;
+      const src = z.playFrom;
+      return text(
+        [
+          `${z.name} (${z.id})`,
+          `  paired: ${z.isPaired}`,
+          `  online: ${z.online}`,
+          `  subscription: ${sub ? `${sub.state} active=${sub.isActive} until ${sub.activeUntil}` : "n/a"}`,
+          `  playFrom: ${src ? `${src.__typename} '${src.name}' (${src.id})` : "none"}`,
+        ].join("\n")
+      );
+    }
+  );
+
+  // ── sound_zone_playback_history ───────────────────────────────────────────
+
+  server.tool(
+    "sound_zone_playback_history",
+    "Last N tracks played in a zone with timestamps and source. Use this to distinguish a music-design issue (wrong tracks) from a device issue (no playback at all).",
+    {
+      sound_zone_id: z.string(),
+      first: z.number().int().positive().max(50).default(20),
+    },
+    async ({ sound_zone_id, first }) => {
+      await assertZoneScope(scopedIds, sound_zone_id);
+      const res = await graphql<{
+        soundZone: {
+          id: string;
+          name: string;
+          playbackHistory: {
+            edges: Array<{
+              node: {
+                startedAt: string;
+                track: { name: string; artists: Array<{ name: string }> };
+                playFrom?: { __typename: string; id?: string; name?: string };
+              };
+            }>;
+          };
+        };
+      }>(Q.SOUND_ZONE_PLAYBACK_HISTORY, { id: sound_zone_id, first });
+      const edges = res.data!.soundZone.playbackHistory.edges;
+      if (edges.length === 0) {
+        return text(
+          `No playback history for ${res.data!.soundZone.name}. Zone may have never played, or device has been offline since SYB started tracking.`
+        );
+      }
+      const lines = edges.map((e) => {
+        const n = e.node;
+        const artists = n.track.artists.map((a) => a.name).join(", ");
+        const src = n.playFrom?.name ?? "?";
+        return `${n.startedAt.slice(0, 19)} | ${n.track.name} — ${artists} | from: ${src}`;
+      });
+      return text(
+        `Last ${edges.length} tracks for ${res.data!.soundZone.name}:\n\n${lines.join("\n")}`
       );
     }
   );

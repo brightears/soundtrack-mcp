@@ -5,13 +5,23 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
-import { registerTools } from "./tools.js";
+import { registerTools, type Role } from "./tools.js";
 import { oauthProvider } from "./auth.js";
 import { randomUUID } from "crypto";
 import apiRouter from "./api.js";
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+// Operator token — when set, /mcp and /operator/mcp require X-Operator-Token
+// matching this value to expose admin tools (subscription_activate, account_register).
+// When unset (self-hosted), /mcp behaves as before (effectively operator).
+const OPERATOR_TOKEN = process.env.OPERATOR_TOKEN || "";
+
+function isOperatorRequest(req: Request): boolean {
+  if (!OPERATOR_TOKEN) return true; // self-hosted, no client mode configured
+  const provided = req.headers["x-operator-token"] as string | undefined;
+  return !!provided && provided === OPERATOR_TOKEN;
+}
 
 const app = express();
 app.set("trust proxy", 1);
@@ -523,7 +533,12 @@ app.get("/openapi.json", (_req, res) => {
 const transports = new Map<string, StreamableHTTPServerTransport>();
 
 // Shared MCP handler — creates or reuses sessions
-async function handleMcpPost(req: Request, res: Response, accountIds?: string[]) {
+async function handleMcpPost(
+  req: Request,
+  res: Response,
+  accountIds?: string[],
+  role: Role = "client"
+) {
   try {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
@@ -539,7 +554,7 @@ async function handleMcpPost(req: Request, res: Response, accountIds?: string[])
       version: "1.0.0",
     });
 
-    registerTools(server, accountIds);
+    registerTools(server, accountIds, role);
 
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
@@ -581,18 +596,51 @@ async function handleMcpSession(req: Request, res: Response) {
   res.status(400).json({ error: "No valid session. Send a POST first." });
 }
 
-// Scoped MCP routes (with OAuth)
+// Scoped MCP routes (with OAuth) — client role, scoped to URL accountIds
 app.post("/c/:accountIds/mcp", optionalBearerAuth, (req, res) => {
   const accountIds = parseAccountIds(req.params.accountIds as string);
-  handleMcpPost(req, res, accountIds);
+  handleMcpPost(req, res, accountIds, "client");
 });
 app.get("/c/:accountIds/mcp", optionalBearerAuth, handleMcpSession);
 app.delete("/c/:accountIds/mcp", optionalBearerAuth, handleMcpSession);
 
-// Unscoped MCP routes (with OAuth)
-app.post("/mcp", optionalBearerAuth, (req, res) => handleMcpPost(req, res));
+// Unscoped MCP routes — when OPERATOR_TOKEN is set, the X-Operator-Token
+// header gates operator-only tools (subscription_activate, account_register).
+// Without the header (or token), connection downgrades to client mode but
+// without scoped accountIds — i.e. it can't see anything until the SDK is
+// rebuilt with /c/<ids>/mcp. Self-hosted users (no OPERATOR_TOKEN) get
+// operator role by default.
+app.post("/mcp", optionalBearerAuth, (req, res) => {
+  const role: Role = isOperatorRequest(req) ? "operator" : "client";
+  handleMcpPost(req, res, undefined, role);
+});
 app.get("/mcp", optionalBearerAuth, handleMcpSession);
 app.delete("/mcp", optionalBearerAuth, handleMcpSession);
+
+// Explicit operator endpoint — same as /mcp but ALWAYS requires the token
+// when OPERATOR_TOKEN is set. Use this URL in BMAsia internal MCP configs.
+app.post("/operator/mcp", optionalBearerAuth, (req, res) => {
+  if (OPERATOR_TOKEN && !isOperatorRequest(req)) {
+    return res.status(401).json({
+      jsonrpc: "2.0",
+      error: { code: -32001, message: "Operator token required" },
+      id: null,
+    });
+  }
+  handleMcpPost(req, res, undefined, "operator");
+});
+app.get("/operator/mcp", optionalBearerAuth, (req, res) => {
+  if (OPERATOR_TOKEN && !isOperatorRequest(req)) {
+    return res.status(401).json({ error: "Operator token required" });
+  }
+  handleMcpSession(req, res);
+});
+app.delete("/operator/mcp", optionalBearerAuth, (req, res) => {
+  if (OPERATOR_TOKEN && !isOperatorRequest(req)) {
+    return res.status(401).json({ error: "Operator token required" });
+  }
+  handleMcpSession(req, res);
+});
 
 // ── Start ──────────────────────────────────────────────────────────────────
 

@@ -177,7 +177,18 @@ https://your-server.com/c/ACCOUNT_ID_1,ACCOUNT_ID_2/mcp
 SOUNDTRACK_ACCOUNT_IDS=ACCOUNT_ID_1,ACCOUNT_ID_2
 ```
 
-## Available Tools (26)
+## Roles & Permissions
+
+Two connection roles, gated by HTTP endpoint + the `OPERATOR_TOKEN` env var:
+
+- **client** — `/c/<account_ids>/mcp`. Limited to the account IDs in the URL. All tools available EXCEPT `subscription_activate` and `account_register`. Triggers no billing.
+- **operator** — `/operator/mcp` (or `/mcp` with the `X-Operator-Token` header). Full access across all accounts the server's API token can see. All tools available, including the cost-impacting ones.
+
+When `OPERATOR_TOKEN` is unset (self-hosted / single-user installs), every endpoint defaults to operator and the gate is a no-op.
+
+For multi-tenant deploys (e.g. BMAsia hosting clients), set `OPERATOR_TOKEN` on the server, hand out `/c/<ids>/mcp` URLs to clients, and keep the operator URL + token internal.
+
+## Available Tools (41)
 
 ### Discovery
 | Tool | Description |
@@ -232,6 +243,33 @@ SOUNDTRACK_ACCOUNT_IDS=ACCOUNT_ID_1,ACCOUNT_ID_2
 | Tool | Description |
 |------|-------------|
 | `generate_playlist` | Generate a playlist from a text description using Soundtrack's AI |
+
+### Admin — Account / Location / Zone Lifecycle
+| Tool | Description | Role |
+|------|-------------|------|
+| `account_register` | Create a new SYB account (plan, country, address, owner user_id). | operator |
+| `account_add_user` | Add a user (by email) as ADMIN/OWNER/CONTACT/etc. on an account. | both |
+| `location_create` | Create a location under an account. Optional `sound_zone_name` seeds the first zone in one call. | both |
+| `location_update` | Rename a location. | both |
+| `location_delete` | Delete a location (must have no active zones). | both |
+| `sound_zone_create` | Create a zone under a location. Inert until `subscription_activate`. | both |
+| `sound_zone_update_name` | Rename a zone — for mirroring an external source-of-truth (e.g. customer's naming or a pricing sheet). | both |
+| `sound_zone_delete` | Delete a zone (cancel subscription first if active). | both |
+| `sound_zone_initiate_pairing` | Generate a pairing code for an unpaired zone. | both |
+| `sound_zone_unpair` | Unpair the device on a zone (kicks current playback until re-paired). | both |
+
+### Admin — Subscription Lifecycle
+| Tool | Description | Role |
+|------|-------------|------|
+| `subscription_activate` | Activate the subscription on a zone. **Operator-only** — triggers SYB billing for at least one month. | operator |
+| `subscription_cancel` | Cancel a zone's subscription (zone keeps playing till end of billing period). | both |
+
+### Admin — Verification
+| Tool | Description | Role |
+|------|-------------|------|
+| `account_billing_status` | Authoritative subscription state for an account: activeStreamingSubscriptions count, billing dates, zones-by-status. The truth source for "did my activation take effect" — zone-level subscription field can be stale. | both |
+| `sound_zone_full_state` | Single zone full state: paired, online, subscription, current source. Use BEFORE acting on customer "please revert" requests. | both |
+| `sound_zone_playback_history` | Last N tracks played + source. Distinguishes a music-design issue (wrong tracks) from a device issue (no playback at all). | both |
 
 ## Architecture
 

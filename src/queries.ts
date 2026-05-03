@@ -387,3 +387,166 @@ query GeneratePlaylist($query: String!, $market: IsoCountry) {
     trackingId
   }
 }`;
+
+// ── Admin: Account Lifecycle ────────────────────────────────────────────────
+
+export const ACCOUNT_REGISTER = `
+mutation AccountRegister($input: AccountRegisterInput!) {
+  accountRegister(input: $input) {
+    account { id businessName plan country }
+  }
+}`;
+
+export const ACCOUNT_ADD_USER = `
+mutation AccountAddUser($input: AccountAddUserInput!) {
+  accountAddUser(input: $input) {
+    user { __typename }
+  }
+}`;
+
+// ── Admin: Location Lifecycle ───────────────────────────────────────────────
+
+export const LOCATION_CREATE = `
+mutation LocationCreate($input: LocationCreateInput!) {
+  locationCreate(input: $input) {
+    location {
+      id name
+      soundZones(first: 10) { edges { node { id name } } }
+    }
+  }
+}`;
+
+export const LOCATION_UPDATE = `
+mutation LocationUpdate($input: LocationUpdateInput!) {
+  locationUpdate(input: $input) {
+    location { id name }
+  }
+}`;
+
+export const LOCATION_DELETE = `
+mutation LocationDelete($input: LocationDeleteInput!) {
+  locationDelete(input: $input) {
+    location { id name }
+  }
+}`;
+
+export const LOCATION_ACCOUNT_LOOKUP = `
+query LocationAccountLookup($id: ID!) {
+  location(id: $id) { id name account { id } }
+}`;
+
+// ── Admin: Sound Zone Lifecycle ─────────────────────────────────────────────
+
+export const SOUND_ZONE_CREATE = `
+mutation SoundZoneCreate($input: SoundZoneCreateInput!) {
+  soundZoneCreate(input: $input) {
+    soundZone { id name }
+  }
+}`;
+
+export const SOUND_ZONE_UPDATE = `
+mutation SoundZoneUpdate($input: SoundZoneUpdateMutationInput!) {
+  soundZoneUpdate(input: $input) {
+    soundZone { id name }
+  }
+}`;
+
+export const SOUND_ZONE_DELETE = `
+mutation SoundZoneDelete($input: SoundZoneDeleteInput!) {
+  soundZoneDelete(input: $input) {
+    soundZone { id name }
+  }
+}`;
+
+export const SOUND_ZONE_INITIATE_PAIRING = `
+mutation SoundZoneInitiatePairing($input: SoundZoneInitiatePairingInput!) {
+  soundZoneInitiatePairing(input: $input) {
+    device { pairingCode }
+  }
+}`;
+
+export const SOUND_ZONE_UNPAIR = `
+mutation SoundZoneUnpair($input: SoundZoneUnpairInput!) {
+  soundZoneUnpair(input: $input) {
+    soundZone { id name isPaired }
+  }
+}`;
+
+export const SOUND_ZONE_ACCOUNT_LOOKUP = `
+query SoundZoneAccountLookup($id: ID!) {
+  soundZone(id: $id) { id name account { id } }
+}`;
+
+// ── Admin: Subscription Lifecycle (operator-gated) ──────────────────────────
+
+export const SUBSCRIPTION_ACTIVATE = `
+mutation SubscriptionActivate($input: SubscriptionActivateInput!) {
+  subscriptionActivate(input: $input) {
+    soundZone {
+      id name
+      account { id businessName plan }
+    }
+  }
+}`;
+
+export const SUBSCRIPTION_CANCEL = `
+mutation SubscriptionCancel($input: SubscriptionCancelInput!) {
+  subscriptionCancel(input: $input) {
+    soundZone { id name }
+  }
+}`;
+
+// ── Admin: Verification (read-only, useful after mutations) ─────────────────
+
+export const ACCOUNT_BILLING_STATUS = `
+query AccountBillingStatus($id: ID!) {
+  account(id: $id) {
+    id businessName plan country
+    soundZoneStatuses { status total }
+    billing {
+      subscription {
+        activeFrom activeTo
+        billingCycle
+        activeStreamingSubscriptions
+        checkoutState
+      }
+    }
+  }
+}`;
+
+export const SOUND_ZONE_FULL_STATE = `
+query SoundZoneFullState($id: ID!) {
+  soundZone(id: $id) {
+    id name isPaired online
+    account { id }
+    subscription { state isActive activeUntil }
+    playFrom {
+      __typename
+      ... on Schedule { id name }
+      ... on Playlist { id name }
+    }
+  }
+}`;
+
+export const SOUND_ZONE_PLAYBACK_HISTORY = `
+query SoundZonePlaybackHistory($id: ID!, $first: Int!) {
+  soundZone(id: $id) {
+    id name
+    playbackHistory(first: $first) {
+      edges {
+        node {
+          startedAt finishedAt
+          playFrom {
+            __typename
+            ... on Schedule { id name }
+            ... on Playlist { id name }
+          }
+          track {
+            name
+            artists { name }
+          }
+        }
+      }
+    }
+  }
+}`;
